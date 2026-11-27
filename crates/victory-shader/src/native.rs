@@ -196,13 +196,25 @@ impl NativeProgram {
 /// translated, to see what a part of a shader does to the picture. Each
 /// entry: container length, code length, offset, cleared bits, set bits.
 pub fn diagnostic_patches() -> &'static [(usize, usize, usize, u32, u32)] {
-    static PATCHES: std::sync::OnceLock<Vec<(usize, usize, usize, u32, u32)>> = std::sync::OnceLock::new();
+    static PATCHES: std::sync::OnceLock<Vec<(usize, usize, usize, u32, u32)>> =
+        std::sync::OnceLock::new();
     PATCHES.get_or_init(|| {
         let list = std::env::var("VICTORY_SHADER_PATCH").unwrap_or_default();
         list.split(',')
             .filter_map(|entry| {
-                let n: Vec<u64> = entry.split(':').filter_map(|x| u64::from_str_radix(x, 16).ok()).collect();
-                (n.len() == 5).then(|| (n[0] as usize, n[1] as usize, n[2] as usize, n[3] as u32, n[4] as u32))
+                let n: Vec<u64> = entry
+                    .split(':')
+                    .filter_map(|x| u64::from_str_radix(x, 16).ok())
+                    .collect();
+                (n.len() == 5).then(|| {
+                    (
+                        n[0] as usize,
+                        n[1] as usize,
+                        n[2] as usize,
+                        n[3] as u32,
+                        n[4] as u32,
+                    )
+                })
             })
             .collect()
     })
@@ -578,8 +590,10 @@ fn accc_program(part: &[u8], root: &[u8]) -> Result<NativeProgram, ShaderError> 
         let user_data = u8::try_from(next).map_err(|_| Malformed("too many root constants"))?;
         next += sgprs;
         // As the code finds them: a table's entry per range it reads.
-        let read: Vec<&UsedResource> =
-            used.iter().filter(|u| u32::from(u.user_data) == u32::from(user_data)).collect();
+        let read: Vec<&UsedResource> = used
+            .iter()
+            .filter(|u| u32::from(u.user_data) == u32::from(user_data))
+            .collect();
         let kind = match u32_at(root, at)? {
             0 => RootType::Table,
             1 => RootType::Constants,

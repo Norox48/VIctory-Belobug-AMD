@@ -74,8 +74,12 @@ fn class(bytes: u64) -> u64 {
 fn slot(size: (u64, bool), make: impl FnOnce(u64) -> Option<Memory>) -> Option<(Slot, Memory)> {
     let mut slabs = SLABS.lock().unwrap_or_else(|e| e.into_inner());
     let of = slabs.entry(size).or_default();
-    let bytes = (size.0 * 8).clamp(1 << 20, 16 << 20).next_multiple_of(64 << 10);
-    let used = of.iter().position(|s| s.memory.is_some() && !s.free.is_empty());
+    let bytes = (size.0 * 8)
+        .clamp(1 << 20, 16 << 20)
+        .next_multiple_of(64 << 10);
+    let used = of
+        .iter()
+        .position(|s| s.memory.is_some() && !s.free.is_empty());
     let at = match used.or_else(|| of.iter().position(|s| s.memory.is_none())) {
         Some(at) => at,
         None => {
@@ -94,7 +98,14 @@ fn slot(size: (u64, bool), make: impl FnOnce(u64) -> Option<Memory>) -> Option<(
     }
     let index = s.free.pop()?;
     debug_assert!(index < s.slots);
-    Some((Slot { size, heap: at, index }, s.memory.clone()?))
+    Some((
+        Slot {
+            size,
+            heap: at,
+            index,
+        },
+        s.memory.clone()?,
+    ))
 }
 
 /// Upload memory for `bytes`: a buffer, where the CPU writes it from its

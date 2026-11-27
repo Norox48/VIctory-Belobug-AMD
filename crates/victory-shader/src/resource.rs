@@ -206,10 +206,7 @@ pub fn track_with(
                 what,
             };
             let mut descriptor = |op: &Operand, role| -> Result<(), ShaderError> {
-                let buffer = matches!(
-                    inst.fields,
-                    Fields::Buffer { .. } | Fields::Smem { .. }
-                );
+                let buffer = matches!(inst.fields, Fields::Buffer { .. } | Fields::Smem { .. });
                 let source = match t.descriptor(inst, op) {
                     Err(_) if addresses && buffer => Source::Address,
                     found => found.map_err(fail)?,
@@ -1485,9 +1482,7 @@ impl<'a> Tracer<'a> {
                 let edge: Vec<Term> = words
                     .iter()
                     .map(|w| match phi_of(w) {
-                        Some((b, i)) if b == block => {
-                            self.lane_term(Term::Value(phis[i].args[j]))
-                        }
+                        Some((b, i)) if b == block => self.lane_term(Term::Value(phis[i].args[j])),
                         _ => *w,
                     })
                     .collect();
@@ -1507,7 +1502,9 @@ impl<'a> Tracer<'a> {
         // shortcut: where other paths bring descriptors, one that brings
         // something else holds the registers' former use: no lane that came
         // that way reads them as a descriptor.
-        let known = args.iter().any(|a| !matches!(a, Err(_) | Ok(Source::Unset | Source::Carried { .. })));
+        let known = args
+            .iter()
+            .any(|a| !matches!(a, Err(_) | Ok(Source::Unset | Source::Carried { .. })));
         let args = args
             .into_iter()
             .map(|a| match a {

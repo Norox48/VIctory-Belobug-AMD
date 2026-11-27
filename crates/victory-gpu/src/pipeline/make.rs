@@ -58,7 +58,13 @@ impl Pending {
             key.update(s.stage.as_bytes());
             key.update(s.hash.as_bytes());
         }
-        key.update(graphics.as_ref().map(|g| g.describe()).unwrap_or_default().as_bytes());
+        key.update(
+            graphics
+                .as_ref()
+                .map(|g| g.describe())
+                .unwrap_or_default()
+                .as_bytes(),
+        );
         Pending {
             screen: graphics.as_ref().is_some_and(|g| g.screen_pass()),
             shaders,
@@ -143,7 +149,10 @@ pub(crate) fn ready(p: &Arc<Pending>) -> Option<&HostPipeline> {
 /// Queues `p` for the workers, once.
 fn start(p: &Arc<Pending>) {
     if !p.queued.swap(true, Ordering::Relaxed) {
-        PEAK.fetch_max(WAITING.fetch_add(1, Ordering::Relaxed) + 1, Ordering::Relaxed);
+        PEAK.fetch_max(
+            WAITING.fetch_add(1, Ordering::Relaxed) + 1,
+            Ordering::Relaxed,
+        );
         queue(p.clone());
     }
 }
@@ -176,7 +185,10 @@ fn wait(p: &Pending, frame: u64) {
         if rest.is_zero() {
             break;
         }
-        held = done.wait_timeout(held, rest).unwrap_or_else(|e| e.into_inner()).0;
+        held = done
+            .wait_timeout(held, rest)
+            .unwrap_or_else(|e| e.into_inner())
+            .0;
     }
     waited.fetch_add(started.elapsed().as_micros() as u64, Ordering::Relaxed);
 }
@@ -199,15 +211,23 @@ fn worker(i: usize, screen: bool) {
                 use windows::Win32::System::Threading::*;
                 let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
             }
-            let Some(receiver) = RECEIVER[usize::from(screen)].get() else { return };
+            let Some(receiver) = RECEIVER[usize::from(screen)].get() else {
+                return;
+            };
             loop {
                 let next = receiver.lock().unwrap_or_else(|e| e.into_inner()).recv();
                 let Ok(p) = next else { return };
                 // SAFETY: a plain call.
                 let id = unsafe { windows::Win32::System::Threading::GetCurrentThreadId() };
-                AT_WORK.lock().unwrap_or_else(|e| e.into_inner()).push((id, p.clone()));
+                AT_WORK
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push((id, p.clone()));
                 p.make();
-                AT_WORK.lock().unwrap_or_else(|e| e.into_inner()).retain(|w| w.0 != id);
+                AT_WORK
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .retain(|w| w.0 != id);
                 if WAITING.fetch_sub(1, Ordering::Relaxed) == 1 {
                     drained();
                 } else {
@@ -226,13 +246,16 @@ fn worker(i: usize, screen: bool) {
 pub(super) fn worker_lost(id: u32) {
     static LOST: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(100);
     let mut lost = None;
-    AT_WORK.lock().unwrap_or_else(|e| e.into_inner()).retain(|w| {
-        if w.0 == id {
-            w.1.lost.store(true, Ordering::Relaxed);
-            lost = Some(w.1.screen);
-        }
-        w.0 != id
-    });
+    AT_WORK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .retain(|w| {
+            if w.0 == id {
+                w.1.lost.store(true, Ordering::Relaxed);
+                lost = Some(w.1.screen);
+            }
+            w.0 != id
+        });
     if let Some(screen) = lost {
         WAITING.fetch_sub(1, Ordering::Relaxed);
         worker(LOST.fetch_add(1, Ordering::Relaxed), screen);

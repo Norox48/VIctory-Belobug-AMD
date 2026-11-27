@@ -443,7 +443,10 @@ fn first_halves_read(p: &Program, io: &mut Io) {
         };
         for &(b, i) in first {
             let known = |all: &[(Site, Interp)]| all.iter().any(|(s, _)| *s == (b, i));
-            if p.blocks[b].insts[i].writes.iter().any(|w| read.contains(&w.1))
+            if p.blocks[b].insts[i]
+                .writes
+                .iter()
+                .any(|w| read.contains(&w.1))
                 && !known(&io.interps)
                 && !known(&more)
             {

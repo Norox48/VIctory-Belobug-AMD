@@ -15,15 +15,17 @@
 //! share, [`console`] which console model the title sees. Planned:
 //! `present` (swap chain).
 
+#[cfg(windows)]
+mod ambient;
 #[cfg(all(windows, feature = "diagnostics"))]
 mod capture;
 #[cfg(windows)]
 mod card;
+#[cfg(windows)]
+mod compose;
 pub mod console;
 #[cfg(all(windows, feature = "diagnostics"))]
 mod copystat;
-#[cfg(all(windows, feature = "diagnostics"))]
-mod profile;
 pub mod descriptor;
 pub mod device;
 #[cfg(windows)]
@@ -37,15 +39,16 @@ mod host;
 mod indirect;
 pub mod list;
 #[cfg(windows)]
-mod memwait;
-#[cfg(windows)]
 mod memory;
-mod timeline;
 pub mod memstat;
+#[cfg(windows)]
+mod memwait;
 pub mod object;
 pub mod pipeline;
 #[cfg(windows)]
 mod primitive;
+#[cfg(all(windows, feature = "diagnostics"))]
+mod profile;
 pub mod query;
 pub mod queue;
 mod readout;
@@ -61,15 +64,12 @@ pub mod shader_cache;
 mod shadow;
 pub mod signature;
 #[cfg(windows)]
-mod ambient;
-#[cfg(windows)]
-mod compose;
-#[cfg(windows)]
-mod twin;
-#[cfg(windows)]
 mod texpool;
 #[cfg(windows)]
 mod texture;
+mod timeline;
+#[cfg(windows)]
+mod twin;
 #[cfg(windows)]
 mod watch;
 
@@ -78,6 +78,6 @@ pub use host::on_failure;
 pub use memstat::report as memory_report;
 #[cfg(windows)]
 pub use watch::{
-    title_memory_committed, title_memory_remapped, title_memory_view, title_memory_view_gone, title_memory_written,
-    writing as kernel_will_write,
+    title_memory_committed, title_memory_remapped, title_memory_view, title_memory_view_gone,
+    title_memory_written, writing as kernel_will_write,
 };

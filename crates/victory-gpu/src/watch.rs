@@ -41,8 +41,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// `copy_back` on one buffer no longer invalidates clean spans in other regions.
 const REGION_SHIFT: usize = 26; // 64 MiB per bucket
 const REGION_BUCKETS: usize = 1024;
-static REGION_EPOCHS: [AtomicU64; REGION_BUCKETS] =
-    [const { AtomicU64::new(1) }; REGION_BUCKETS];
+static REGION_EPOCHS: [AtomicU64; REGION_BUCKETS] = [const { AtomicU64::new(1) }; REGION_BUCKETS];
 
 #[inline]
 fn bump_region_epochs(start: usize, end: usize) {
@@ -233,7 +232,9 @@ const PIN: std::time::Duration = std::time::Duration::from_secs(2);
 impl Guards {
     /// Whether `block` is left writable for a kernel write.
     fn pinned(&self, block: usize) -> bool {
-        self.pins.iter().any(|&(from, to, _)| from <= block && block < to)
+        self.pins
+            .iter()
+            .any(|&(from, to, _)| from <= block && block < to)
     }
 }
 
@@ -287,7 +288,12 @@ pub(crate) fn stretch(at: usize, end: usize, reach: usize) -> Option<(usize, usi
         (start, from) = (a, o);
     }
     let start_in = start.max(low);
-    Some((start_in, stop.min(high), section, from + (start_in - start) as u64))
+    Some((
+        start_in,
+        stop.min(high),
+        section,
+        from + (start_in - start) as u64,
+    ))
 }
 
 /// Diagnostics: how `[at, at + len)` is made of views of physical pages:
@@ -296,7 +302,9 @@ pub(crate) fn stretch(at: usize, end: usize, reach: usize) -> Option<(usize, usi
 /// stretch of a section).
 pub(crate) fn layout(at: usize, len: usize) -> (usize, usize, usize, usize) {
     let views = VIEWS.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(views) = views.as_ref() else { return (0, 0, 0, 0) };
+    let Some(views) = views.as_ref() else {
+        return (0, 0, 0, 0);
+    };
     let end = at.saturating_add(len);
     let first = views
         .by_addr
@@ -339,7 +347,11 @@ impl Views {
             .map(|(a, _)| *a);
         let hit: Vec<usize> = first
             .into_iter()
-            .chain(self.by_addr.range(at.saturating_add(1)..end).map(|(a, _)| *a))
+            .chain(
+                self.by_addr
+                    .range(at.saturating_add(1)..end)
+                    .map(|(a, _)| *a),
+            )
             .collect();
         for a in hit {
             let Some((n, section, offset)) = self.by_addr.remove(&a) else {
@@ -366,7 +378,10 @@ impl Views {
         if at >= base + n {
             return &[];
         }
-        let key = (section, offset / BLOCK as u64 + ((at - base) / BLOCK) as u64);
+        let key = (
+            section,
+            offset / BLOCK as u64 + ((at - base) / BLOCK) as u64,
+        );
         self.pages.get(&key).map_or(&[], Vec::as_slice)
     }
 }
@@ -375,7 +390,9 @@ impl Views {
 /// [`Views::shown`]).
 fn aliases(at: usize) -> Vec<usize> {
     let views = VIEWS.lock().unwrap_or_else(|e| e.into_inner());
-    views.as_ref().map_or(Vec::new(), |v| v.shown(at - at % BLOCK).to_vec())
+    views
+        .as_ref()
+        .map_or(Vec::new(), |v| v.shown(at - at % BLOCK).to_vec())
 }
 
 /// The runtime mapped a view at `[at, at + len)` of the bytes from `offset`
@@ -383,7 +400,11 @@ fn aliases(at: usize) -> Vec<usize> {
 /// same pages guarded at another view are opened: their copies check them
 /// again, which also guards the new view with them.
 pub fn title_memory_view(at: usize, len: usize, section: usize, offset: u64) {
-    if !view_guard() || len == 0 || !at.is_multiple_of(BLOCK) || !offset.is_multiple_of(BLOCK as u64) {
+    if !view_guard()
+        || len == 0
+        || !at.is_multiple_of(BLOCK)
+        || !offset.is_multiple_of(BLOCK as u64)
+    {
         return;
     }
     let mut others = Vec::new();
@@ -393,7 +414,10 @@ pub fn title_memory_view(at: usize, len: usize, section: usize, offset: u64) {
         views.forget(at, len);
         views.by_addr.insert(at, (len, section, offset));
         for k in 0..len / BLOCK {
-            let shown = views.pages.entry((section, offset / BLOCK as u64 + k as u64)).or_default();
+            let shown = views
+                .pages
+                .entry((section, offset / BLOCK as u64 + k as u64))
+                .or_default();
             if shown.len() < MANY_VIEWS {
                 others.extend_from_slice(shown);
             }
@@ -640,7 +664,11 @@ fn open(g: &mut Guards, start: usize, end: usize) -> bool {
     if start >= end || g.aliased.is_empty() {
         return any;
     }
-    let aliased: Vec<usize> = g.aliased.range(start / BLOCK..end.div_ceil(BLOCK)).copied().collect();
+    let aliased: Vec<usize> = g
+        .aliased
+        .range(start / BLOCK..end.div_ceil(BLOCK))
+        .copied()
+        .collect();
     for block in aliased {
         g.aliased.remove(&block);
         for at in aliases(block * BLOCK) {
@@ -677,12 +705,20 @@ fn open_here(g: &mut Guards, start: usize, end: usize) -> bool {
     let give = |from: usize, to: usize| {
         let mut old = 0;
         // SAFETY: blocks we made read-only; only their protection changes.
-        let whole =
-            unsafe { VirtualProtect((from * BLOCK) as *const _, (to - from) * BLOCK, PAGE_READWRITE, &mut old) } != 0;
+        let whole = unsafe {
+            VirtualProtect(
+                (from * BLOCK) as *const _,
+                (to - from) * BLOCK,
+                PAGE_READWRITE,
+                &mut old,
+            )
+        } != 0;
         if !whole && to - from > 1 {
             for block in from..to {
                 // SAFETY: as above, one block.
-                unsafe { VirtualProtect((block * BLOCK) as *const _, BLOCK, PAGE_READWRITE, &mut old) };
+                unsafe {
+                    VirtualProtect((block * BLOCK) as *const _, BLOCK, PAGE_READWRITE, &mut old)
+                };
             }
         }
     };
@@ -778,7 +814,11 @@ pub fn title_memory_remapped(at: usize, len: usize) {
                 )
             };
         }
-        let aliased: Vec<usize> = g.aliased.range(at / BLOCK..end.div_ceil(BLOCK)).copied().collect();
+        let aliased: Vec<usize> = g
+            .aliased
+            .range(at / BLOCK..end.div_ceil(BLOCK))
+            .copied()
+            .collect();
         for block in aliased {
             g.aliased.remove(&block);
         }
@@ -850,7 +890,10 @@ pub(crate) fn try_open_guarded(at: usize) -> bool {
         } != 0;
         if opened {
             bump_region_epochs(block, block + BLOCK);
-            tracing::warn!(at = format_args!("{at:#x}"), "a read-only view block that no guard knew was opened");
+            tracing::warn!(
+                at = format_args!("{at:#x}"),
+                "a read-only view block that no guard knew was opened"
+            );
         }
         return opened;
     }
@@ -912,7 +955,9 @@ mod tests {
     /// Two views of the same two physical pages, told as the runtime tells
     /// them: the two addresses.
     fn two_views() -> (usize, usize) {
-        use windows_sys::Win32::System::Memory::{CreateFileMappingW, FILE_MAP_WRITE, MapViewOfFile};
+        use windows_sys::Win32::System::Memory::{
+            CreateFileMappingW, FILE_MAP_WRITE, MapViewOfFile,
+        };
         // SAFETY: a pagefile section of two blocks, mapped read-write twice.
         unsafe {
             let section = CreateFileMappingW(
@@ -939,7 +984,11 @@ mod tests {
             title_memory_remapped(view, 2 * BLOCK);
             title_memory_view_gone(view, 2 * BLOCK);
             // SAFETY: our view.
-            unsafe { UnmapViewOfFile(MEMORY_MAPPED_VIEW_ADDRESS { Value: view as *mut _ }) };
+            unsafe {
+                UnmapViewOfFile(MEMORY_MAPPED_VIEW_ADDRESS {
+                    Value: view as *mut _,
+                })
+            };
         }
     }
 
@@ -949,8 +998,15 @@ mod tests {
     fn a_write_through_another_view_is_reported_at_the_guarded_one() {
         let (guarded, other) = two_views();
         let pages = |block: usize| (guarded + block * BLOCK) / PAGE;
-        assert_eq!(guard(guarded, guarded + 2 * BLOCK), Some(vec![pages(0), pages(1)]));
-        assert_eq!(guard(guarded, guarded + 2 * BLOCK), Some(Vec::new()), "nothing written yet");
+        assert_eq!(
+            guard(guarded, guarded + 2 * BLOCK),
+            Some(vec![pages(0), pages(1)])
+        );
+        assert_eq!(
+            guard(guarded, guarded + 2 * BLOCK),
+            Some(Vec::new()),
+            "nothing written yet"
+        );
         // SAFETY: the second view; the handler opens it on the fault.
         unsafe { ((other + BLOCK + 8) as *mut u8).write(1) };
         assert_eq!(guard(guarded, guarded + 2 * BLOCK), Some(vec![pages(1)]));
@@ -978,7 +1034,12 @@ mod tests {
         );
         assert_eq!(
             stretch(base + 3 * BLOCK, base + 3 * BLOCK + 1, reach),
-            Some((base + 3 * BLOCK, base + 4 * BLOCK, section, (9 * BLOCK) as u64))
+            Some((
+                base + 3 * BLOCK,
+                base + 4 * BLOCK,
+                section,
+                (9 * BLOCK) as u64
+            ))
         );
         // Across the gap: no stretch holds it.
         assert_eq!(stretch(base + 2 * BLOCK, base + 3 * BLOCK + 1, reach), None);
@@ -993,9 +1054,15 @@ mod tests {
     fn a_write_is_reported_at_every_checked_view() {
         let (one, two) = two_views();
         let pages = |view: usize, block: usize| (view + block * BLOCK) / PAGE;
-        assert_eq!(guard(one, one + 2 * BLOCK), Some(vec![pages(one, 0), pages(one, 1)]));
+        assert_eq!(
+            guard(one, one + 2 * BLOCK),
+            Some(vec![pages(one, 0), pages(one, 1)])
+        );
         // The other view was made read-only with the first, not noted clean.
-        assert_eq!(guard(two, two + 2 * BLOCK), Some(vec![pages(two, 0), pages(two, 1)]));
+        assert_eq!(
+            guard(two, two + 2 * BLOCK),
+            Some(vec![pages(two, 0), pages(two, 1)])
+        );
         assert_eq!(guard(one, one + 2 * BLOCK), Some(Vec::new()));
         assert_eq!(guard(two, two + 2 * BLOCK), Some(Vec::new()));
         // SAFETY: the first view; the handler opens it on the fault.
@@ -1011,7 +1078,9 @@ mod tests {
     /// checks its pages again.
     #[test]
     fn a_view_mapped_beside_a_guarded_one_makes_it_check_again() {
-        use windows_sys::Win32::System::Memory::{CreateFileMappingW, FILE_MAP_WRITE, MapViewOfFile};
+        use windows_sys::Win32::System::Memory::{
+            CreateFileMappingW, FILE_MAP_WRITE, MapViewOfFile,
+        };
         // SAFETY: a pagefile section of two blocks, mapped read-write.
         let (section, guarded) = unsafe {
             let section = CreateFileMappingW(
@@ -1023,14 +1092,22 @@ mod tests {
                 std::ptr::null(),
             );
             assert!(!section.is_null());
-            (section, MapViewOfFile(section, FILE_MAP_WRITE, 0, 0, 2 * BLOCK).Value as usize)
+            (
+                section,
+                MapViewOfFile(section, FILE_MAP_WRITE, 0, 0, 2 * BLOCK).Value as usize,
+            )
         };
         title_memory_view(guarded, 2 * BLOCK, section as usize, 0);
         let pages = |block: usize| (guarded + block * BLOCK) / PAGE;
-        assert_eq!(guard(guarded, guarded + 2 * BLOCK), Some(vec![pages(0), pages(1)]));
+        assert_eq!(
+            guard(guarded, guarded + 2 * BLOCK),
+            Some(vec![pages(0), pages(1)])
+        );
         assert_eq!(guard(guarded, guarded + 2 * BLOCK), Some(Vec::new()));
         // SAFETY: a second view of the second page only.
-        let other = unsafe { MapViewOfFile(section, FILE_MAP_WRITE, 0, BLOCK as u32, BLOCK).Value as usize };
+        let other = unsafe {
+            MapViewOfFile(section, FILE_MAP_WRITE, 0, BLOCK as u32, BLOCK).Value as usize
+        };
         assert_ne!(other, 0);
         title_memory_view(other, BLOCK, section as usize, BLOCK as u64);
         assert_eq!(guard(guarded, guarded + 2 * BLOCK), Some(vec![pages(1)]));
@@ -1039,7 +1116,9 @@ mod tests {
         // SAFETY: our view.
         unsafe {
             windows_sys::Win32::System::Memory::UnmapViewOfFile(
-                windows_sys::Win32::System::Memory::MEMORY_MAPPED_VIEW_ADDRESS { Value: other as *mut _ },
+                windows_sys::Win32::System::Memory::MEMORY_MAPPED_VIEW_ADDRESS {
+                    Value: other as *mut _,
+                },
             )
         };
         drop_views(&[guarded]);
@@ -1148,14 +1227,29 @@ mod tests {
             let into = unsafe { std::slice::from_raw_parts_mut((view + 100) as *mut u8, 13) };
             file.read(into).is_ok_and(|n| n == 13)
         };
-        assert!(!read(&mut file), "the kernel does not fault into our handler");
+        assert!(
+            !read(&mut file),
+            "the kernel does not fault into our handler"
+        );
         writing(view + 100, 13);
         assert!(read(&mut file));
         // SAFETY: the bytes just read.
-        assert_eq!(unsafe { std::slice::from_raw_parts((view + 100) as *const u8, 13) }, b"from the disk");
-        assert_eq!(guard(view, view + 2 * BLOCK), Some((view / PAGE..view / PAGE + 1).collect()));
+        assert_eq!(
+            unsafe { std::slice::from_raw_parts((view + 100) as *const u8, 13) },
+            b"from the disk"
+        );
+        assert_eq!(
+            guard(view, view + 2 * BLOCK),
+            Some((view / PAGE..view / PAGE + 1).collect())
+        );
         // SAFETY: our view.
-        unsafe { UnmapViewOfFile(windows_sys::Win32::System::Memory::MEMORY_MAPPED_VIEW_ADDRESS { Value: view as *mut _ }) };
+        unsafe {
+            UnmapViewOfFile(
+                windows_sys::Win32::System::Memory::MEMORY_MAPPED_VIEW_ADDRESS {
+                    Value: view as *mut _,
+                },
+            )
+        };
         title_memory_remapped(view, 2 * BLOCK);
     }
 }

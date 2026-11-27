@@ -46,7 +46,12 @@ unsafe extern "system" {
 unsafe extern "system" {
     fn SymInitialize(process: *mut c_void, path: *const u8, invade: i32) -> i32;
     fn SymSetOptions(options: u32) -> u32;
-    fn SymGetLineFromAddr64(process: *mut c_void, at: u64, displacement: *mut u32, line: *mut u64) -> i32;
+    fn SymGetLineFromAddr64(
+        process: *mut c_void,
+        at: u64,
+        displacement: *mut u32,
+        line: *mut u64,
+    ) -> i32;
     fn SymFromAddr(process: *mut c_void, at: u64, displacement: *mut u64, symbol: *mut u8) -> i32;
 }
 
@@ -68,7 +73,9 @@ impl Drop for Inside {
 pub(crate) fn here() -> Inside {
     static FILE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
     let file = FILE.get_or_init(|| {
-        let file = std::env::var("VICTORY_PROFILE").ok().filter(|f| !f.is_empty());
+        let file = std::env::var("VICTORY_PROFILE")
+            .ok()
+            .filter(|f| !f.is_empty());
         if let Some(file) = file.clone() {
             std::thread::spawn(move || sample(&file));
         }
@@ -242,7 +249,13 @@ fn write(file: &str, stacks: &HashMap<Vec<u64>, u32>, others: &HashMap<Vec<u64>,
         symbol[0..4].copy_from_slice(&88u32.to_ne_bytes());
         symbol[80..84].copy_from_slice(&500u32.to_ne_bytes());
         let mut displacement = 0u64;
-        if SymFromAddr(GetCurrentProcess(), at, &mut displacement, symbol.as_mut_ptr()) == 0 {
+        if SymFromAddr(
+            GetCurrentProcess(),
+            at,
+            &mut displacement,
+            symbol.as_mut_ptr(),
+        ) == 0
+        {
             return if module == 0 {
                 "(title code)".to_string()
             } else {
@@ -260,7 +273,10 @@ fn write(file: &str, stacks: &HashMap<Vec<u64>, u32>, others: &HashMap<Vec<u64>,
         } else {
             String::new()
         };
-        format!("{module_name}!{}{line}", String::from_utf8_lossy(&symbol[84..84 + len.min(500)]))
+        format!(
+            "{module_name}!{}{line}",
+            String::from_utf8_lossy(&symbol[84..84 + len.min(500)])
+        )
     };
     let mut names: HashMap<u64, String> = HashMap::new();
     let mut own: HashMap<String, u32> = HashMap::new();
@@ -291,7 +307,10 @@ fn write(file: &str, stacks: &HashMap<Vec<u64>, u32>, others: &HashMap<Vec<u64>,
     }
     // Whole stacks, the most seen first: the submitting thread's, then the
     // others' that are not only waiting.
-    for (title, set, most) in [("stacks", stacks, 30), ("stacks of other threads", others, 40)] {
+    for (title, set, most) in [
+        ("stacks", stacks, 30),
+        ("stacks of other threads", others, 40),
+    ] {
         let mut all: Vec<_> = set.iter().collect();
         all.sort_unstable_by(|a, b| b.1.cmp(a.1));
         text.push_str(&format!("-- {title}\n"));
@@ -303,7 +322,9 @@ fn write(file: &str, stacks: &HashMap<Vec<u64>, u32>, others: &HashMap<Vec<u64>,
                 .map(|&at| names.entry(at).or_insert_with(|| name(at)).clone())
                 .collect();
             let idle = frames.first().is_some_and(|f| {
-                ["Wait", "Delay", "RemoveIoCompletion", "WorkerFactory"].iter().any(|w| f.contains(w))
+                ["Wait", "Delay", "RemoveIoCompletion", "WorkerFactory"]
+                    .iter()
+                    .any(|w| f.contains(w))
             }) && !frames.iter().any(|f| f.contains("victory_gpu"));
             if idle && !std::ptr::eq(set, stacks) {
                 continue;

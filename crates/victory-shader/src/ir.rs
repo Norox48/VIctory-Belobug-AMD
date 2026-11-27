@@ -454,7 +454,10 @@ fn unspill(blocks: &mut [Block]) {
             continue;
         };
         let slot = SPILLS.start + at as u8;
-        let operand = Operand::Scalar { code: slot, dwords: 1 };
+        let operand = Operand::Scalar {
+            code: slot,
+            dwords: 1,
+        };
         let (dst, src) = if write {
             (Some(operand), v.src[0])
         } else {

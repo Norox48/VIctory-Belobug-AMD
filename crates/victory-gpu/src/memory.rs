@@ -58,7 +58,10 @@ impl Map {
         Some(Map {
             buffer,
             entries: data as usize,
-            views: vec![View { buffer: None, bytes: 0 }],
+            views: vec![View {
+                buffer: None,
+                bytes: 0,
+            }],
             chunks: HashMap::new(),
             windows: Default::default(),
         })
@@ -85,7 +88,10 @@ impl Map {
             ONCE.call_once(|| tracing::warn!("too many views of title memory by address"));
             return None;
         }
-        self.views.push(View { buffer: Some(buffer), bytes });
+        self.views.push(View {
+            buffer: Some(buffer),
+            bytes,
+        });
         VIEWS.store(self.views.len() as u64, Ordering::Release);
         Some(self.views.len() as u32 - 1)
     }
@@ -168,7 +174,9 @@ pub(crate) fn fill(
     if guard.is_none() {
         *guard = Map::new();
     }
-    let Some(map) = guard.as_ref() else { return seen };
+    let Some(map) = guard.as_ref() else {
+        return seen;
+    };
     if seen == 0 {
         let desc = D3D12_SHADER_RESOURCE_VIEW_DESC {
             Format: DXGI_FORMAT_R32_TYPELESS,
@@ -186,7 +194,12 @@ pub(crate) fn fill(
         // SAFETY: a live buffer and a slot of the heap.
         unsafe { device.CreateShaderResourceView(&map.buffer, Some(&desc), slot(0)) };
     }
-    for (k, view) in map.views.iter().enumerate().skip(seen.saturating_sub(1) as usize) {
+    for (k, view) in map
+        .views
+        .iter()
+        .enumerate()
+        .skip(seen.saturating_sub(1) as usize)
+    {
         let desc = D3D12_UNORDERED_ACCESS_VIEW_DESC {
             Format: DXGI_FORMAT_R32_TYPELESS,
             ViewDimension: D3D12_UAV_DIMENSION_BUFFER,

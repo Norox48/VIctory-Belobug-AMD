@@ -114,7 +114,15 @@ fn shader_with(
     let io = io::raise(&p, &native)?;
     let st = structure::structure(&p)?;
     let empty = super::container::build(&[]);
-    emit(&Container::parse(&empty)?, &native, &p, &st, &io, &res, crate::emit::Target::ANY)
+    emit(
+        &Container::parse(&empty)?,
+        &native,
+        &p,
+        &st,
+        &io,
+        &res,
+        crate::emit::Target::ANY,
+    )
 }
 
 #[cfg(windows)]

@@ -352,14 +352,32 @@ pub(crate) mod test_asm {
     }
 
     pub const ENCODINGS: &[Encoding] = &[
-        Encoding::Sop2, Encoding::Sopk, Encoding::Sop1, Encoding::Sopc, Encoding::Sopp,
-        Encoding::Smem, Encoding::Vop2, Encoding::Vop1, Encoding::Vopc, Encoding::Vop3,
-        Encoding::Vop3p, Encoding::Vintrp, Encoding::Ds, Encoding::Mubuf, Encoding::Mtbuf,
-        Encoding::Mimg, Encoding::Exp, Encoding::Flat, Encoding::Global, Encoding::Scratch,
+        Encoding::Sop2,
+        Encoding::Sopk,
+        Encoding::Sop1,
+        Encoding::Sopc,
+        Encoding::Sopp,
+        Encoding::Smem,
+        Encoding::Vop2,
+        Encoding::Vop1,
+        Encoding::Vopc,
+        Encoding::Vop3,
+        Encoding::Vop3p,
+        Encoding::Vintrp,
+        Encoding::Ds,
+        Encoding::Mubuf,
+        Encoding::Mtbuf,
+        Encoding::Mimg,
+        Encoding::Exp,
+        Encoding::Flat,
+        Encoding::Global,
+        Encoding::Scratch,
     ];
 
     pub fn opcodes() -> impl Iterator<Item = (Encoding, u16, &'static str)> {
-        ENCODINGS.iter().flat_map(|&e| e.table().iter().map(move |&(op, name)| (e, op, name)))
+        ENCODINGS
+            .iter()
+            .flat_map(|&e| e.table().iter().map(move |&(op, name)| (e, op, name)))
     }
 }
 
@@ -431,7 +449,12 @@ mod tests {
             let Fields::Image { addr, .. } = d[0].fields(false) else {
                 panic!("{:?}", d[0].name())
             };
-            assert_eq!(addr, [Operand::Vector { reg: 0, dwords: n }], "{:?}", d[0].name());
+            assert_eq!(
+                addr,
+                [Operand::Vector { reg: 0, dwords: n }],
+                "{:?}",
+                d[0].name()
+            );
         }
     }
 

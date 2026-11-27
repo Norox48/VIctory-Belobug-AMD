@@ -169,7 +169,11 @@ pub(crate) fn plane_of(words: Option<&[u32; 10]>) -> Plane {
 
 /// Makes the title's unordered-access view `words` of a depth texture with
 /// twins at `at`, on the twin of its plane; that twin.
-pub(crate) fn view(twin: &Twin, words: Option<&[u32; 10]>, at: D3D12_CPU_DESCRIPTOR_HANDLE) -> Option<ID3D12Resource> {
+pub(crate) fn view(
+    twin: &Twin,
+    words: Option<&[u32; 10]>,
+    at: D3D12_CPU_DESCRIPTOR_HANDLE,
+) -> Option<ID3D12Resource> {
     let plane = plane_of(words);
     let (texture, format) = match plane {
         Plane::Depth => (&twin.depth, twin.depth_format),
@@ -384,13 +388,21 @@ fn make_copier(host: &Host) -> windows::core::Result<Copier> {
         pipelines: std::sync::Mutex::new(Vec::new()),
         views,
         // SAFETY: a plain query.
-        step: unsafe { device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) },
+        step: unsafe {
+            device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)
+        },
         next: AtomicU32::new(0),
     })
 }
 
 impl Copier {
-    fn pipeline(&self, host: &Host, format: DXGI_FORMAT, depth: bool, stencil: bool) -> Option<ID3D12PipelineState> {
+    fn pipeline(
+        &self,
+        host: &Host,
+        format: DXGI_FORMAT,
+        depth: bool,
+        stencil: bool,
+    ) -> Option<ID3D12PipelineState> {
         let key = (format.0, depth, stencil);
         let mut made = self.pipelines.lock().unwrap_or_else(|e| e.into_inner());
         if let Some((_, p)) = made.iter().find(|(k, _)| *k == key) {
@@ -451,7 +463,10 @@ impl Copier {
             ..Default::default()
         };
         // SAFETY: a complete description with live shaders and root.
-        match unsafe { host.device.CreateGraphicsPipelineState::<ID3D12PipelineState>(&desc) } {
+        match unsafe {
+            host.device
+                .CreateGraphicsPipelineState::<ID3D12PipelineState>(&desc)
+        } {
             Ok(p) => {
                 made.push((key, p.clone()));
                 Some(p)
@@ -477,7 +492,10 @@ fn copier(host: &Host) -> Option<&'static Copier> {
 
 /// Records the copy of `resource`'s twins (the planes asked) into it.
 fn copy(list: &HostList, resource: This, depth: bool, stencil: bool) -> bool {
-    let (Some(host), Some(texture)) = (crate::host::host(), crate::resource::host_resource(resource)) else {
+    let (Some(host), Some(texture)) = (
+        crate::host::host(),
+        crate::resource::host_resource(resource),
+    ) else {
         return false;
     };
     let Some(twin) = crate::resource::depth_twin(resource) else {
@@ -493,7 +511,9 @@ fn copy(list: &HostList, resource: This, depth: bool, stencil: bool) -> bool {
     let l = &list.list;
     const DEPTH_WRITE: u32 = 0x10;
     crate::list::ensure_state(list, resource, DEPTH_WRITE);
-    let planes: Vec<&ID3D12Resource> = std::iter::once(&twin.depth).chain(twin.stencil.as_ref()).collect();
+    let planes: Vec<&ID3D12Resource> = std::iter::once(&twin.depth)
+        .chain(twin.stencil.as_ref())
+        .collect();
     let barriers = |before, after| -> Vec<D3D12_RESOURCE_BARRIER> {
         planes
             .iter()
@@ -552,7 +572,9 @@ fn copy(list: &HostList, resource: This, depth: bool, stencil: bool) -> bool {
                 ptr: gpu.ptr + u64::from(first) * u64::from(c.step),
             },
         );
-        l.IASetPrimitiveTopology(windows::Win32::Graphics::Direct3D::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        l.IASetPrimitiveTopology(
+            windows::Win32::Graphics::Direct3D::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        );
         l.RSSetViewports(&[D3D12_VIEWPORT {
             Width: twin.width as f32,
             Height: twin.height as f32,

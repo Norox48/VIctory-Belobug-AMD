@@ -32,16 +32,13 @@ pub(crate) fn sub(counter: &AtomicU64, bytes: u64) {
 /// Bytes and number of the host buffers alive, by kind: upload, read-back,
 /// shared, unordered access; heaps of textures and of copies' tiles; and
 /// command lists alive.
-pub(crate) static BUFFERS: [[AtomicU64; 2]; 6] = [const { [AtomicU64::new(0), AtomicU64::new(0)] }; 6];
+pub(crate) static BUFFERS: [[AtomicU64; 2]; 6] =
+    [const { [AtomicU64::new(0), AtomicU64::new(0)] }; 6];
 pub(crate) static LISTS: AtomicU64 = AtomicU64::new(0);
 
 /// Counts `resource` (`bytes`) as one of `kind` until it is destroyed.
 #[cfg(windows)]
-pub(crate) fn track(
-    resource: &impl windows::core::Interface,
-    kind: usize,
-    bytes: u64,
-) {
+pub(crate) fn track(resource: &impl windows::core::Interface, kind: usize, bytes: u64) {
     use std::ffi::c_void;
     use windows::core::{GUID, HRESULT};
     /// An object the resource releases when it is destroyed.
@@ -52,7 +49,11 @@ pub(crate) fn track(
         kind: usize,
         bytes: u64,
     }
-    unsafe extern "system" fn query(_: *mut c_void, _: *const GUID, out: *mut *mut c_void) -> HRESULT {
+    unsafe extern "system" fn query(
+        _: *mut c_void,
+        _: *const GUID,
+        out: *mut *mut c_void,
+    ) -> HRESULT {
         // SAFETY: the caller passes an out pointer.
         unsafe { *out = std::ptr::null_mut() };
         HRESULT(0x8000_4002_u32 as i32)
@@ -118,8 +119,23 @@ pub fn report() -> String {
     );
     {
         use std::fmt::Write;
-        for (name, b) in ["upload", "readback", "shared", "unordered", "texture heaps", "tile heaps"].iter().zip(&BUFFERS) {
-            let _ = write!(line, ", {name} {} MiB ({})", mib(b[0].load(Relaxed)), b[1].load(Relaxed));
+        for (name, b) in [
+            "upload",
+            "readback",
+            "shared",
+            "unordered",
+            "texture heaps",
+            "tile heaps",
+        ]
+        .iter()
+        .zip(&BUFFERS)
+        {
+            let _ = write!(
+                line,
+                ", {name} {} MiB ({})",
+                mib(b[0].load(Relaxed)),
+                b[1].load(Relaxed)
+            );
         }
         let _ = write!(line, ", {} lists", LISTS.load(Relaxed));
     }

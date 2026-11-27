@@ -717,8 +717,15 @@ fn map_whole(physical: &mut Physical, base: usize, pages: &[usize]) -> bool {
             }
             if len > WHOLE
                 || len != first.section.1
-                || physical.views.range(..at + len).next_back().is_some_and(|(v, (n, _))| v + n > at)
-                || physical.whole.iter().any(|w| Arc::ptr_eq(&w.2, &first.section))
+                || physical
+                    .views
+                    .range(..at + len)
+                    .next_back()
+                    .is_some_and(|(v, (n, _))| v + n > at)
+                || physical
+                    .whole
+                    .iter()
+                    .any(|w| Arc::ptr_eq(&w.2, &first.section))
             {
                 return false;
             }
@@ -733,7 +740,11 @@ fn map_whole(physical: &mut Physical, base: usize, pages: &[usize]) -> bool {
             if !map_view(at, len, &all) {
                 return false;
             }
-            tracing::info!(at = format_args!("{at:#x}"), len, "a reservation of physical pages shown whole");
+            tracing::info!(
+                at = format_args!("{at:#x}"),
+                len,
+                "a reservation of physical pages shown whole"
+            );
             victory_gpu::title_memory_remapped(at, len);
             physical.views.insert(at, (len, all));
             physical.whole.push((at, len, first.section.clone()));
@@ -757,7 +768,12 @@ fn map_whole(physical: &mut Physical, base: usize, pages: &[usize]) -> bool {
         if !same || slice.index != wanted && (taken || physical.bound.contains(page)) {
             // shortcut: shown as it is; the title sees other bytes than it
             // asked for.
-            tracing::warn!(page, wanted, same, "a page mapped again in a reservation shown whole");
+            tracing::warn!(
+                page,
+                wanted,
+                same,
+                "a page mapped again in a reservation shown whole"
+            );
             continue;
         }
         if slice.index != wanted {
@@ -823,7 +839,11 @@ pub fn map_alias(to: u64, from: u64, len: u64) -> bool {
     let (to, from, len) = (to as usize, from as usize, len as usize);
     let mut physical = physical();
     if in_whole(&physical, to, len) {
-        tracing::warn!(to = format_args!("{to:#x}"), len, "page mappings into a reservation shown whole");
+        tracing::warn!(
+            to = format_args!("{to:#x}"),
+            len,
+            "page mappings into a reservation shown whole"
+        );
         return false;
     }
     unmap(&mut physical, to, len);
@@ -938,7 +958,12 @@ fn map_view(base: usize, len: usize, slice: &Slice) -> bool {
         return false;
     }
     // The GPU side guards every view of a page together.
-    victory_gpu::title_memory_view(base, len, slice.section.0 as usize, (slice.index * PAGE) as u64);
+    victory_gpu::title_memory_view(
+        base,
+        len,
+        slice.section.0 as usize,
+        (slice.index * PAGE) as u64,
+    );
     true
 }
 

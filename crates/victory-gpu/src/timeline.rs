@@ -366,7 +366,10 @@ mod tests {
     fn until(what: impl Fn() -> bool) {
         let started = Instant::now();
         while !what() {
-            assert!(started.elapsed() < Duration::from_secs(20), "still held back");
+            assert!(
+                started.elapsed() < Duration::from_secs(20),
+                "still held back"
+            );
             std::thread::sleep(Duration::from_millis(1));
         }
     }
@@ -381,7 +384,9 @@ mod tests {
         compute.submit(op(&at, &log, &[(1, 2), (3, 4)]));
         let done = Arc::new(AtomicBool::new(false));
         let mark = done.clone();
-        compute.submit(Op::Work(Box::new(move || mark.store(true, Ordering::Release))));
+        compute.submit(Op::Work(Box::new(move || {
+            mark.store(true, Ordering::Release)
+        })));
         assert!(log.lock().unwrap().is_empty() && !compute.idle());
         graphics.submit(op(&at, &log, &[(0, 1), (2, 3)]));
         // The watching thread may run some of it.

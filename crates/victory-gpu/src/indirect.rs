@@ -346,25 +346,38 @@ pub(crate) fn hoist_mode() -> u8 {
     static MODE: AtomicU8 = AtomicU8::new(u8::MAX);
     let mode = MODE.load(Ordering::Relaxed);
     if mode == u8::MAX {
-        let set = std::env::var("VICTORY_HOIST_CLAMPS").ok().and_then(|v| v.parse().ok()).unwrap_or(7);
+        let set = std::env::var("VICTORY_HOIST_CLAMPS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(7);
         MODE.store(set, Ordering::Relaxed);
         if cfg!(feature = "diagnostics")
             && let Some(file) = std::env::var_os("VICTORY_HOIST_FILE")
         {
-            let _ = std::thread::Builder::new().name("victory-hoist".into()).spawn(move || {
-                loop {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    let read = std::fs::read_to_string(&file).ok().and_then(|t| t.trim().parse::<u8>().ok());
-                    let cuts = CUTS.each_ref().map(|c| c.swap(0, Ordering::Relaxed));
-                    if cuts != [0, 0] {
-                        tracing::info!(cuts = cuts[0], queries = cuts[1], "lists cut for hoisted clamps");
+            let _ = std::thread::Builder::new()
+                .name("victory-hoist".into())
+                .spawn(move || {
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                        let read = std::fs::read_to_string(&file)
+                            .ok()
+                            .and_then(|t| t.trim().parse::<u8>().ok());
+                        let cuts = CUTS.each_ref().map(|c| c.swap(0, Ordering::Relaxed));
+                        if cuts != [0, 0] {
+                            tracing::info!(
+                                cuts = cuts[0],
+                                queries = cuts[1],
+                                "lists cut for hoisted clamps"
+                            );
+                        }
+                        if let Some(n) =
+                            read.filter(|&n| n < 8 && n != MODE.load(Ordering::Relaxed))
+                        {
+                            MODE.store(n, Ordering::Relaxed);
+                            tracing::info!(mode = n, "clamps of indirect draws: mode changed");
+                        }
                     }
-                    if let Some(n) = read.filter(|&n| n < 8 && n != MODE.load(Ordering::Relaxed)) {
-                        MODE.store(n, Ordering::Relaxed);
-                        tracing::info!(mode = n, "clamps of indirect draws: mode changed");
-                    }
-                }
-            });
+                });
         }
         return set;
     }
@@ -372,8 +385,10 @@ pub(crate) fn hoist_mode() -> u8 {
 }
 
 /// Cuts made for hoisted clamps, and those not made for queries that run.
-pub(crate) static CUTS: [std::sync::atomic::AtomicU64; 2] =
-    [std::sync::atomic::AtomicU64::new(0), std::sync::atomic::AtomicU64::new(0)];
+pub(crate) static CUTS: [std::sync::atomic::AtomicU64; 2] = [
+    std::sync::atomic::AtomicU64::new(0),
+    std::sync::atomic::AtomicU64::new(0),
+];
 
 /// Whether clamps of indirect draws go to a list before the one that draws.
 pub(crate) fn hoisting() -> bool {
@@ -389,16 +404,28 @@ pub(crate) fn bound_before(
     count: Option<(&ID3D12Resource, u64)>,
     (kind, stride, records): (u32, u32, u32),
 ) -> Option<(ID3D12Resource, u64)> {
-    let bytes = validate_layout((kind, stride, records), src_offset, count.map(|(_, off)| off))?;
+    let bytes = validate_layout(
+        (kind, stride, records),
+        src_offset,
+        count.map(|(_, off)| off),
+    )?;
     if records == 0 {
         return None;
     }
     let (c, budget) = (clamp()?, clamps.budget()?);
     // SAFETY: live buffers.
-    let (src_base, count_base) =
-        unsafe { (src.GetGPUVirtualAddress(), count.map(|(b, _)| b.GetGPUVirtualAddress())) };
+    let (src_base, count_base) = unsafe {
+        (
+            src.GetGPUVirtualAddress(),
+            count.map(|(b, _)| b.GetGPUVirtualAddress()),
+        )
+    };
     // Addresses the shader's offsets (32 bits) reach, as in `record_clamp`.
-    let fits = |offset: u64, len: u64| offset.checked_add(len).is_some_and(|end| end <= u64::from(u32::MAX));
+    let fits = |offset: u64, len: u64| {
+        offset
+            .checked_add(len)
+            .is_some_and(|end| end <= u64::from(u32::MAX))
+    };
     let (src_gpu, args_offset) = if fits(src_offset, bytes) {
         (src_base, src_offset as u32)
     } else {

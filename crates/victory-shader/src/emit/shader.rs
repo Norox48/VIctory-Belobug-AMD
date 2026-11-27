@@ -199,7 +199,14 @@ impl Shader {
             && let Some(&(_, limit)) = self.limits.iter().find(|l| l.0 == args[0])
         {
             let i32t = self.t.i32;
-            let at = self.op(block, "binary.i32", Attr::ReadNone, i32t, 40, &[args[1], limit]);
+            let at = self.op(
+                block,
+                "binary.i32",
+                Attr::ReadNone,
+                i32t,
+                40,
+                &[args[1], limit],
+            );
             let mut args = args.to_vec();
             args[1] = at;
             return self.op_as_is(block, name, attr, ret, opcode, &args);
@@ -407,7 +414,14 @@ impl Shader {
         let index = if !sampler && super::limits_indices() {
             let last = self.m.i32(super::OWN_SLOTS - 1);
             let i32t = self.t.i32;
-            self.op(block, "binary.i32", Attr::ReadNone, i32t, 40, &[index, last])
+            self.op(
+                block,
+                "binary.i32",
+                Attr::ReadNone,
+                i32t,
+                40,
+                &[index, last],
+            )
         } else {
             index
         };

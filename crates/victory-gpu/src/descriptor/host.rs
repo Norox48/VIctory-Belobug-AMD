@@ -236,9 +236,7 @@ impl Bindless {
     /// The slot-making budget, refilled for the time passed since.
     fn budget(&mut self) -> &mut [u64; 2] {
         let now = std::time::Instant::now();
-        let (at, left) = self
-            .budget
-            .get_or_insert((now, [SLOT_BUDGET_US; 2]));
+        let (at, left) = self.budget.get_or_insert((now, [SLOT_BUDGET_US; 2]));
         let add = now.duration_since(*at).as_micros() as u64 / 8;
         if add > 0 {
             *at = now;
@@ -534,7 +532,11 @@ const SAMPLERS: u32 = D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE;
 /// which stay below [`victory_shader::emit::VIEW_SLOTS`], are inside it.
 fn view_slots(count: u32) -> u32 {
     let slots = count + crate::memory::SLOTS;
-    if cfg!(test) { slots } else { slots.max(victory_shader::emit::VIEW_SLOTS) }
+    if cfg!(test) {
+        slots
+    } else {
+        slots.max(victory_shader::emit::VIEW_SLOTS)
+    }
 }
 
 /// Dynamic slots of a sampler heap capped at [`SAMPLERS`], for tables
@@ -585,7 +587,9 @@ fn same_range(x: &Range, y: &Range) -> bool {
 
 /// Whether `range` lies in one of `merged` (as [`merged`] leaves them).
 fn covered(merged: &[(Arc<crate::shadow::Shadow>, usize, usize)], range: &Range) -> bool {
-    let Some((shadow, address, len)) = range else { return true };
+    let Some((shadow, address, len)) = range else {
+        return true;
+    };
     let key = (Arc::as_ptr(shadow) as usize, *address);
     let after = merged.partition_point(|(s, a, _)| (Arc::as_ptr(s) as usize, *a) <= key);
     after > 0 && {
@@ -613,10 +617,22 @@ fn plan_note(part: usize, started: std::time::Instant, walked: usize, found: usi
     let frame = crate::queue::presented();
     let last = PLAN_FRAME.load(Ordering::Relaxed);
     if frame >= last + 64
-        && PLAN_FRAME.compare_exchange(last, frame, Ordering::Relaxed, Ordering::Relaxed).is_ok()
+        && PLAN_FRAME
+            .compare_exchange(last, frame, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
     {
         let frames = (frame - last).max(1) as f64;
-        const NAMES: [&str; 9] = ["direct slots", "all slots listed", "stale views", "slots made", "results applied", "whole plan", "differing (found: lacking)", "lacking a write (found: a bounce)", "lacking a read (found: gone with a write or bounce)"];
+        const NAMES: [&str; 9] = [
+            "direct slots",
+            "all slots listed",
+            "stale views",
+            "slots made",
+            "results applied",
+            "whole plan",
+            "differing (found: lacking)",
+            "lacking a write (found: a bounce)",
+            "lacking a read (found: gone with a write or bounce)",
+        ];
         let mut text = String::new();
         for (name, n) in NAMES.iter().zip(&PLAN_NOTES) {
             let [us, runs, walked, found] = [0, 1, 2, 3].map(|k| n[k].swap(0, Ordering::Relaxed));
@@ -628,8 +644,12 @@ fn plan_note(part: usize, started: std::time::Instant, walked: usize, found: usi
                 found as f64 / frames
             ));
         }
-        let lacks = LACKS.each_ref().map(|n| n.swap(0, Ordering::Relaxed) as f64 / frames);
-        let [any, more] = LACK_FRAMES.each_ref().map(|n| n[1].swap(0, Ordering::Relaxed));
+        let lacks = LACKS
+            .each_ref()
+            .map(|n| n.swap(0, Ordering::Relaxed) as f64 / frames);
+        let [any, more] = LACK_FRAMES
+            .each_ref()
+            .map(|n| n[1].swap(0, Ordering::Relaxed));
         text.push_str(&format!(
             "; slots lacking per frame, by write+bounce*2+read*4: {:.1?}; of {frames:.0} frames,              {any} had a lacking slot and {more} one lacking more than a bounce",
             &lacks[1..]
@@ -772,12 +792,18 @@ impl HostHeap {
         // SAFETY: a plain call on a live heap.
         let total = unsafe { h.heap.GetDesc() }.NumDescriptors;
         if !sampler && total < victory_shader::emit::VIEW_SLOTS {
-            tracing::warn!(total, "a view heap shorter than shaders keep their indices in");
+            tracing::warn!(
+                total,
+                "a view heap shorter than shaders keep their indices in"
+            );
         }
         if let Err(e) = h.fill_null(kind, total) {
             tracing::warn!(error = %e, "host descriptor heap not made null");
         }
-        tracing::debug!(ms = started.elapsed().as_millis(), "host descriptor heap made null");
+        tracing::debug!(
+            ms = started.elapsed().as_millis(),
+            "host descriptor heap made null"
+        );
         h
     }
 
@@ -930,7 +956,13 @@ impl HostHeap {
         }
         let Some(first) = found else {
             static ONCE: std::sync::Once = std::sync::Once::new();
-            ONCE.call_once(|| tracing::warn!(n, spare, "no free dynamic descriptor slots: a table is not made"));
+            ONCE.call_once(|| {
+                tracing::warn!(
+                    n,
+                    spare,
+                    "no free dynamic descriptor slots: a table is not made"
+                )
+            });
             *no_run = n;
             FAILED[1].fetch_add(1, Ordering::Relaxed);
             return None;
@@ -1004,7 +1036,12 @@ impl HostHeap {
 
     /// Makes slot `index` a null view matching the resource kind a shader
     /// expects there (CBV, buffer SRV/UAV, or 2D texture).
-    pub(crate) fn make_null_kind(&self, index: u32, kind: victory_shader::ResourceType, dwords: u8) {
+    pub(crate) fn make_null_kind(
+        &self,
+        index: u32,
+        kind: victory_shader::ResourceType,
+        dwords: u8,
+    ) {
         if self.sampler {
             self.null_sampler(index);
             self.keep(index, None);
@@ -1552,7 +1589,9 @@ impl HostHeap {
                 due.push(t as crate::object::This);
             }
             self.recheck_at.store(
-                b.recheck.front().map_or(u64::MAX, |&(f, _)| f + RECHECK_FRAMES),
+                b.recheck
+                    .front()
+                    .map_or(u64::MAX, |&(f, _)| f + RECHECK_FRAMES),
                 Ordering::Release,
             );
             self.record_hint
@@ -1670,7 +1709,11 @@ impl HostHeap {
         let mode = crate::resource::textures();
         let due = match b.uploaded.get(&(texture as usize)) {
             None => true,
-            Some((h, _)) if mode == crate::resource::Textures::Keep && h.as_raw() == host.as_raw() => false,
+            Some((h, _))
+                if mode == crate::resource::Textures::Keep && h.as_raw() == host.as_raw() =>
+            {
+                false
+            }
             // Another texture at the object's address.
             Some((h, _)) if h.as_raw() != host.as_raw() => true,
             Some((_, last)) if mode == crate::resource::Textures::Always => frame > *last,
@@ -1684,11 +1727,12 @@ impl HostHeap {
             Some(_) => false,
         };
         if due {
-            b.uploaded
-                .insert(texture as usize, (host.clone(), frame));
+            b.uploaded.insert(texture as usize, (host.clone(), frame));
             b.recheck.push_back((frame, texture as usize));
             self.recheck_at.store(
-                b.recheck.front().map_or(u64::MAX, |&(f, _)| f + RECHECK_FRAMES),
+                b.recheck
+                    .front()
+                    .map_or(u64::MAX, |&(f, _)| f + RECHECK_FRAMES),
                 Ordering::Release,
             );
         }
@@ -1912,7 +1956,9 @@ impl HostHeap {
                         for (n, l) in why.iter_mut().zip(lacking) {
                             *n += usize::from(l);
                         }
-                        bits |= u8::from(lacking[0]) | u8::from(lacking[1]) << 1 | u8::from(lacking[2]) << 2;
+                        bits |= u8::from(lacking[0])
+                            | u8::from(lacking[1]) << 1
+                            | u8::from(lacking[2]) << 2;
                         lacking.contains(&true)
                     }
                     (None, Some(_)) => {
@@ -1936,7 +1982,9 @@ impl HostHeap {
                     changed = true;
                 } else {
                     b.loose = true;
-                    let held = new.filter(|n| n.read.is_some()).and_then(|n| n.retained.clone());
+                    let held = new
+                        .filter(|n| n.read.is_some())
+                        .and_then(|n| n.retained.clone());
                     b.extra.extend(held);
                 }
             }
@@ -1987,7 +2035,10 @@ impl HostHeap {
         BACKLOG[1].store(b.record_pending.len() as u64, Ordering::Relaxed);
         b.full.1 |= made_any && changed || b.loose && frame >= b.full.0 + LOOSE_FRAMES;
         let remake = b.full.1 && b.full.0 != frame || cfg!(test);
-        if !made_any && (!b.full.1 || !remake) && let Some(plan) = &b.plan {
+        if !made_any
+            && (!b.full.1 || !remake)
+            && let Some(plan) = &b.plan
+        {
             return Some(plan.clone());
         }
         // All of it is copied by the first submission of a frame only: the
@@ -2158,7 +2209,11 @@ impl HostHeap {
             None => text.push_str(" no use"),
             Some(u) => {
                 use std::fmt::Write;
-                let _ = write!(text, " at {:#x}..{:#x} unmapped {}", u.at.0, u.at.1, u.unmapped);
+                let _ = write!(
+                    text,
+                    " at {:#x}..{:#x} unmapped {}",
+                    u.at.0, u.at.1, u.unmapped
+                );
                 if let Some(s) = &u.direct {
                     let _ = write!(text, " direct dead {}", s.is_dead());
                 }
@@ -2168,7 +2223,11 @@ impl HostHeap {
                 if let Some(r) = &u.retained {
                     // SAFETY: a live resource.
                     let d = unsafe { r.GetDesc() };
-                    let _ = write!(text, " retained dim {} {}x{} f{} flags {:#x}", d.Dimension.0, d.Width, d.Height, d.Format.0, d.Flags.0);
+                    let _ = write!(
+                        text,
+                        " retained dim {} {}x{} f{} flags {:#x}",
+                        d.Dimension.0, d.Width, d.Height, d.Format.0, d.Flags.0
+                    );
                     if d.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER {
                         // SAFETY: a live buffer.
                         let _ = write!(text, " va {:#x}", unsafe { r.GetGPUVirtualAddress() });
@@ -2427,8 +2486,7 @@ fn buffer_srv(
     let offset = shadow.offset(address);
     if element != 0 && offset % element == 0 {
         buffer.FirstElement += offset / element;
-        if buffer.Flags.0 & D3D12_BUFFER_SRV_FLAG_RAW.0 != 0
-            && !raw_start_fits(buffer.FirstElement)
+        if buffer.Flags.0 & D3D12_BUFFER_SRV_FLAG_RAW.0 != 0 && !raw_start_fits(buffer.FirstElement)
         {
             let first = buffer.FirstElement;
             once!(first, "raw buffer view not on 16 bytes of its host copy");
@@ -2457,7 +2515,11 @@ fn buffer_srv(
         );
         return None;
     }
-    let size = if buffer.StructureByteStride > 0 { u64::from(buffer.StructureByteStride) } else { element_size_of(buffer.Flags.0 & D3D12_BUFFER_SRV_FLAG_RAW.0 != 0, element) };
+    let size = if buffer.StructureByteStride > 0 {
+        u64::from(buffer.StructureByteStride)
+    } else {
+        element_size_of(buffer.Flags.0 & D3D12_BUFFER_SRV_FLAG_RAW.0 != 0, element)
+    };
     if !fits_buffer(&shadow, buffer.FirstElement, buffer.NumElements, size) {
         return None;
     }
@@ -2485,7 +2547,13 @@ fn fits_buffer(shadow: &crate::shadow::Shadow, first: u64, count: u32, size: u64
         .and_then(|n| n.checked_mul(size.max(1)));
     let fits = count > 0 && size > 0 && end.is_some_and(|e| e <= width);
     if !fits {
-        once!(first, count, size, width, "a buffer view the host does not allow");
+        once!(
+            first,
+            count,
+            size,
+            width,
+            "a buffer view the host does not allow"
+        );
     }
     fits
 }
@@ -2501,7 +2569,11 @@ fn buffer_uav(
 ) -> Option<Kept> {
     // SAFETY: a buffer view's union member.
     let structured = raw_stride(unsafe { desc.Anonymous.Buffer }.StructureByteStride);
-    let whole = if structured { 0 } else { uav_element_size(&desc).unwrap_or(0) };
+    let whole = if structured {
+        0
+    } else {
+        uav_element_size(&desc).unwrap_or(0)
+    };
     let shadow = crate::shadow::for_view(address, len, whole)?;
     // SAFETY: a live buffer.
     let flags = unsafe { shadow.buffer.GetDesc() }.Flags;
@@ -2524,8 +2596,7 @@ fn buffer_uav(
     buffer.CounterOffsetInBytes = 0;
     if element != 0 && offset % element == 0 {
         buffer.FirstElement += offset / element;
-        if buffer.Flags.0 & D3D12_BUFFER_UAV_FLAG_RAW.0 != 0
-            && !raw_start_fits(buffer.FirstElement)
+        if buffer.Flags.0 & D3D12_BUFFER_UAV_FLAG_RAW.0 != 0 && !raw_start_fits(buffer.FirstElement)
         {
             let first = buffer.FirstElement;
             once!(
@@ -2551,10 +2622,18 @@ fn buffer_uav(
         };
         desc.Format = DXGI_FORMAT_R32_TYPELESS;
     } else {
-        once!(offset, element, "unordered buffer view not on an element of its host copy");
+        once!(
+            offset,
+            element,
+            "unordered buffer view not on an element of its host copy"
+        );
         return None;
     }
-    let size = if buffer.StructureByteStride > 0 { u64::from(buffer.StructureByteStride) } else { element_size_of(buffer.Flags.0 & D3D12_BUFFER_UAV_FLAG_RAW.0 != 0, element) };
+    let size = if buffer.StructureByteStride > 0 {
+        u64::from(buffer.StructureByteStride)
+    } else {
+        element_size_of(buffer.Flags.0 & D3D12_BUFFER_UAV_FLAG_RAW.0 != 0, element)
+    };
     if !fits_buffer(&shadow, buffer.FirstElement, buffer.NumElements, size) {
         return None;
     }
@@ -2656,19 +2735,35 @@ fn without_mips(d: &mut D3D12_SHADER_RESOURCE_VIEW_DESC, skip: u32) {
         match d.ViewDimension {
             D3D12_SRV_DIMENSION_TEXTURE2D => {
                 let t = &mut d.Anonymous.Texture2D;
-                cut(&mut t.MostDetailedMip, &mut t.MipLevels, Some(&mut t.ResourceMinLODClamp));
+                cut(
+                    &mut t.MostDetailedMip,
+                    &mut t.MipLevels,
+                    Some(&mut t.ResourceMinLODClamp),
+                );
             }
             D3D12_SRV_DIMENSION_TEXTURE2DARRAY => {
                 let t = &mut d.Anonymous.Texture2DArray;
-                cut(&mut t.MostDetailedMip, &mut t.MipLevels, Some(&mut t.ResourceMinLODClamp));
+                cut(
+                    &mut t.MostDetailedMip,
+                    &mut t.MipLevels,
+                    Some(&mut t.ResourceMinLODClamp),
+                );
             }
             D3D12_SRV_DIMENSION_TEXTURECUBE => {
                 let t = &mut d.Anonymous.TextureCube;
-                cut(&mut t.MostDetailedMip, &mut t.MipLevels, Some(&mut t.ResourceMinLODClamp));
+                cut(
+                    &mut t.MostDetailedMip,
+                    &mut t.MipLevels,
+                    Some(&mut t.ResourceMinLODClamp),
+                );
             }
             D3D12_SRV_DIMENSION_TEXTURECUBEARRAY => {
                 let t = &mut d.Anonymous.TextureCubeArray;
-                cut(&mut t.MostDetailedMip, &mut t.MipLevels, Some(&mut t.ResourceMinLODClamp));
+                cut(
+                    &mut t.MostDetailedMip,
+                    &mut t.MipLevels,
+                    Some(&mut t.ResourceMinLODClamp),
+                );
             }
             _ => {}
         }
@@ -2828,13 +2923,21 @@ fn largest_mip(resource: &[u32; 14], desc: &[u32; 16]) -> u32 {
         let clamp = unsafe {
             match d.ViewDimension {
                 D3D12_SRV_DIMENSION_TEXTURE2D => d.Anonymous.Texture2D.ResourceMinLODClamp,
-                D3D12_SRV_DIMENSION_TEXTURE2DARRAY => d.Anonymous.Texture2DArray.ResourceMinLODClamp,
+                D3D12_SRV_DIMENSION_TEXTURE2DARRAY => {
+                    d.Anonymous.Texture2DArray.ResourceMinLODClamp
+                }
                 D3D12_SRV_DIMENSION_TEXTURECUBE => d.Anonymous.TextureCube.ResourceMinLODClamp,
-                D3D12_SRV_DIMENSION_TEXTURECUBEARRAY => d.Anonymous.TextureCubeArray.ResourceMinLODClamp,
+                D3D12_SRV_DIMENSION_TEXTURECUBEARRAY => {
+                    d.Anonymous.TextureCubeArray.ResourceMinLODClamp
+                }
                 _ => 0.0,
             }
         };
-        if clamp.is_finite() && clamp >= 1.0 { clamp.floor().min(32.0) as u32 } else { 0 }
+        if clamp.is_finite() && clamp >= 1.0 {
+            clamp.floor().min(32.0) as u32
+        } else {
+            0
+        }
     };
     static CLAMPED: [AtomicU64; 2] = [AtomicU64::new(0), AtomicU64::new(0)];
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -2852,7 +2955,9 @@ fn largest_mip(resource: &[u32; 14], desc: &[u32; 16]) -> u32 {
             "a placed texture's view holds its detail back"
         );
     }
-    let mut first = desc[4].max(if on { clamp } else { 0 }).min(mips.saturating_sub(1));
+    let mut first = desc[4]
+        .max(if on { clamp } else { 0 })
+        .min(mips.saturating_sub(1));
     let block = (70..=84).contains(&format) || (94..=99).contains(&format);
     let fits = |k: u32| {
         (width >> k) > 0
@@ -3784,7 +3889,10 @@ void main(uint3 id : SV_DispatchThreadID) {
         assert!(!heap.upload_due(tex, &a, 10));
         assert!(!heap.upload_due(tex, &a, 10 + RECHECK_FRAMES - 1));
         assert!(heap.upload_due(tex, &b, 11), "a new texture at the address");
-        assert!(heap.upload_due(tex, &b, 11 + RECHECK_FRAMES), "looked at again");
+        assert!(
+            heap.upload_due(tex, &b, 11 + RECHECK_FRAMES),
+            "looked at again"
+        );
         // At most `RECHECKS` known textures per frame.
         let frame = 1000;
         let many: Vec<_> = (0..2 * RECHECKS as usize)
@@ -3794,7 +3902,10 @@ void main(uint3 id : SV_DispatchThreadID) {
                 t
             })
             .collect();
-        let again = many.iter().filter(|&&t| heap.upload_due(t, &a, frame)).count();
+        let again = many
+            .iter()
+            .filter(|&&t| heap.upload_due(t, &a, frame))
+            .count();
         assert_eq!(again, RECHECKS as usize);
     }
 

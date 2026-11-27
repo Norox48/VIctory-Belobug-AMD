@@ -423,8 +423,11 @@ pub(crate) fn dump_targets(frame: u64) {
                 .and_then(|(_, t)| t.split_once(' '))
                 .and_then(|(t, _)| u64::from_str_radix(t, 16).ok())
             {
-                args.push_str(&format!("{i} {at:#x} {}
-", crate::shadow::args_text(at)));
+                args.push_str(&format!(
+                    "{i} {at:#x} {}
+",
+                    crate::shadow::args_text(at)
+                ));
             }
         }
         // `VICTORY_PEEK=<program>:<table+slot>:<hex offset>,...`: what a placed
@@ -455,12 +458,14 @@ pub(crate) fn dump_targets(frame: u64) {
                     }
                 });
             // A fourth part, a hex length: that many bytes there, as a file.
-            if let (Some(at), Some(len)) =
-                (found, parts.next().and_then(|l| usize::from_str_radix(l, 16).ok()))
-            {
+            if let (Some(at), Some(len)) = (
+                found,
+                parts.next().and_then(|l| usize::from_str_radix(l, 16).ok()),
+            ) {
                 let mut bytes = vec![0u8; len.min(1 << 26)];
                 if crate::host::read_into((at + offset) as *const u8, &mut bytes) {
-                    let _ = std::fs::write(folder.join(format!("peek-{:x}.bin", at + offset)), bytes);
+                    let _ =
+                        std::fs::write(folder.join(format!("peek-{:x}.bin", at + offset)), bytes);
                 }
             }
             if let Some(at) = found {
@@ -473,8 +478,13 @@ pub(crate) fn dump_targets(frame: u64) {
         }
         args.push_str(&crate::resource::targets_text());
         let _ = std::fs::write(folder.join("args.txt"), args);
-        let _ = std::fs::write(folder.join("passes.txt"), text.join("
-"));
+        let _ = std::fs::write(
+            folder.join("passes.txt"),
+            text.join(
+                "
+",
+            ),
+        );
     }
     let Some(host) = crate::host::host() else {
         return;
@@ -625,23 +635,62 @@ fn to_rgba(format: u32, w: usize, h: usize, pitch: usize, rows: &[u8]) -> Option
             }
             return Some(out);
         }
-        23..=25 | 89 => (4, Box::new(move |b| {
-            let v = u32_at(b, 0);
-            [(v & 0x3ff) as f32, (v >> 10 & 0x3ff) as f32, (v >> 20 & 0x3ff) as f32]
-        })),
-        26 => (4, Box::new(move |b| {
-            let v = u32_at(b, 0);
-            [small_float(v & 0x7ff, 6), small_float(v >> 11 & 0x7ff, 6), small_float(v >> 22, 5)]
-        })),
-        9..=10 => (8, Box::new(move |b| [half(u16_at(b, 0)), half(u16_at(b, 1)), half(u16_at(b, 2))])),
-        11..=14 => (8, Box::new(move |b| [0, 1, 2].map(|i| f32::from(u16_at(b, i))))),
-        33..=34 => (4, Box::new(move |b| [half(u16_at(b, 0)), half(u16_at(b, 1)), 0.0])),
-        1..=2 => (16, Box::new(move |b| {
-            [0, 1, 2].map(|i| f32::from_bits(u32_at(b, i)))
-        })),
-        15..=16 => (8, Box::new(move |b| [f32::from_bits(u32_at(b, 0)), f32::from_bits(u32_at(b, 1)), 0.0])),
-        35..=38 => (4, Box::new(move |b| [f32::from(u16_at(b, 0)), f32::from(u16_at(b, 1)), 0.0])),
-        48..=52 => (2, Box::new(move |b| [f32::from(b[0]), f32::from(b[1]), 0.0])),
+        23..=25 | 89 => (
+            4,
+            Box::new(move |b| {
+                let v = u32_at(b, 0);
+                [
+                    (v & 0x3ff) as f32,
+                    (v >> 10 & 0x3ff) as f32,
+                    (v >> 20 & 0x3ff) as f32,
+                ]
+            }),
+        ),
+        26 => (
+            4,
+            Box::new(move |b| {
+                let v = u32_at(b, 0);
+                [
+                    small_float(v & 0x7ff, 6),
+                    small_float(v >> 11 & 0x7ff, 6),
+                    small_float(v >> 22, 5),
+                ]
+            }),
+        ),
+        9..=10 => (
+            8,
+            Box::new(move |b| [half(u16_at(b, 0)), half(u16_at(b, 1)), half(u16_at(b, 2))]),
+        ),
+        11..=14 => (
+            8,
+            Box::new(move |b| [0, 1, 2].map(|i| f32::from(u16_at(b, i)))),
+        ),
+        33..=34 => (
+            4,
+            Box::new(move |b| [half(u16_at(b, 0)), half(u16_at(b, 1)), 0.0]),
+        ),
+        1..=2 => (
+            16,
+            Box::new(move |b| [0, 1, 2].map(|i| f32::from_bits(u32_at(b, i)))),
+        ),
+        15..=16 => (
+            8,
+            Box::new(move |b| {
+                [
+                    f32::from_bits(u32_at(b, 0)),
+                    f32::from_bits(u32_at(b, 1)),
+                    0.0,
+                ]
+            }),
+        ),
+        35..=38 => (
+            4,
+            Box::new(move |b| [f32::from(u16_at(b, 0)), f32::from(u16_at(b, 1)), 0.0]),
+        ),
+        48..=52 => (
+            2,
+            Box::new(move |b| [f32::from(b[0]), f32::from(b[1]), 0.0]),
+        ),
         // Single channels (and depth planes): shown as grey.
         39..=43 => (4, Box::new(move |b| [f32::from_bits(u32_at(b, 0)); 3])),
         19..=22 => (8, Box::new(move |b| [f32::from_bits(u32_at(b, 0)); 3])),
@@ -662,7 +711,10 @@ fn to_rgba(format: u32, w: usize, h: usize, pitch: usize, rows: &[u8]) -> Option
     } else {
         (0.0, finite.fold(0.0f32, f32::max))
     };
-    let wild = values.iter().filter(|v| v.iter().any(|c| !c.is_finite())).count();
+    let wild = values
+        .iter()
+        .filter(|v| v.iter().any(|c| !c.is_finite()))
+        .count();
     let mut most = high;
     if !grey && matches!(format, 1..=2 | 9..=11 | 26) {
         // What most pixels reach: a few far brighter ones leave the rest black.
@@ -827,11 +879,20 @@ mod tests {
     fn unorm16_and_xr_bias_targets_decode_as_their_formats() {
         // Red 0x8000 (a half-float -0), green 0x4000, blue 0.
         let unorm16 = [0x00, 0x80, 0x00, 0x40, 0, 0, 0xff, 0xff];
-        assert_eq!(super::to_rgba(11, 1, 1, 8, &unorm16), Some(vec![255, 127, 0, 255]));
+        assert_eq!(
+            super::to_rgba(11, 1, 1, 8, &unorm16),
+            Some(vec![255, 127, 0, 255])
+        );
         // Red 0x3ff, green 0x1ff, blue 0, alpha 3.
         let xr = (0x3ffu32 | 0x1ff << 10 | 3 << 30).to_le_bytes();
-        assert_eq!(super::to_rgba(89, 1, 1, 4, &xr), Some(vec![255, 127, 0, 255]));
+        assert_eq!(
+            super::to_rgba(89, 1, 1, 4, &xr),
+            Some(vec![255, 127, 0, 255])
+        );
         // B8G8R8A8 still swaps to RGBA.
-        assert_eq!(super::to_rgba(87, 1, 1, 4, &[1, 2, 3, 4]), Some(vec![3, 2, 1, 255]));
+        assert_eq!(
+            super::to_rgba(87, 1, 1, 4, &[1, 2, 3, 4]),
+            Some(vec![3, 2, 1, 255])
+        );
     }
 }

@@ -214,7 +214,8 @@ pub(crate) fn title_written(texture: &ID3D12Resource) -> bool {
 /// Textures a bindless slot began to view, to upload before anything of the
 /// next submission runs: every list reads the slot, not only the one whose
 /// recording made it.
-static FIRST: Mutex<Vec<(Arc<Staging>, Arc<crate::resource::HostTexture>)>> = Mutex::new(Vec::new());
+static FIRST: Mutex<Vec<(Arc<Staging>, Arc<crate::resource::HostTexture>)>> =
+    Mutex::new(Vec::new());
 
 /// A bindless slot views `resource` from now on.
 pub(crate) fn upload_first(resource: This, texture: &ID3D12Resource) {
@@ -229,7 +230,10 @@ pub(crate) fn upload_first(resource: This, texture: &ID3D12Resource) {
     if let Some(copy) = crate::resource::host_copy(resource)
         && let Some(staging) = staging(resource, texture)
     {
-        FIRST.lock().unwrap_or_else(|e| e.into_inner()).push((staging, copy));
+        FIRST
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push((staging, copy));
     }
 }
 
@@ -473,12 +477,20 @@ pub(crate) mod flips {
         let d = &s.layout.desc;
         let key = (
             s.memory as usize,
-            [s.layout.size as u32, s.mips, s.footprints.len() as u32, s.skip],
+            [
+                s.layout.size as u32,
+                s.mips,
+                s.footprints.len() as u32,
+                s.skip,
+            ],
         );
         let mut h = [0u8; 8];
         h.copy_from_slice(&hash.as_bytes()[..8]);
         let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
-        let e = seen.get_or_insert_with(HashMap::new).entry(key).or_default();
+        let e = seen
+            .get_or_insert_with(HashMap::new)
+            .entry(key)
+            .or_default();
         if e.hashes.is_empty() {
             e.desc = format!("{d:?}");
             e.first = frame;
@@ -512,14 +524,29 @@ pub(crate) mod flips {
         }
         let mut most: Vec<_> = seen.iter().collect();
         most.sort_by_key(|(_, s)| std::cmp::Reverse((s.back, s.changes)));
-        tracing::info!(textures = seen.len(), changed, back, zero, "texture contents");
+        tracing::info!(
+            textures = seen.len(),
+            changed,
+            back,
+            zero,
+            "texture contents"
+        );
         for ((at, k), s) in most.into_iter().take(12) {
             tracing::info!(
                 "  texture {at:#x} {k:?} changed {} (told {}), back {}, zero {}, frames {}-{}: {}",
-                s.changes, s.told, s.back, s.zero, s.first, s.last, s.desc
+                s.changes,
+                s.told,
+                s.back,
+                s.zero,
+                s.first,
+                s.last,
+                s.desc
             );
             let views = VIEWS.lock().unwrap_or_else(|e| e.into_inner());
-            for (a, list) in views.range(*at as u64..*at as u64 + u64::from(k[0])).take(6) {
+            for (a, list) in views
+                .range(*at as u64..*at as u64 + u64::from(k[0]))
+                .take(6)
+            {
                 for (r, d) in list.iter().take(3) {
                     tracing::info!("    view at {a:#x}: resource {r:x?} srv {d:x?}");
                 }
@@ -566,8 +593,7 @@ pub(crate) fn committed(at: *const u8, len: usize) -> bool {
             }
             p = (p + 1).next_multiple_of(1 << 16);
         }
-        return end <= at as usize
-            || crate::host::read_into((end - 1) as *const u8, &mut byte);
+        return end <= at as usize || crate::host::read_into((end - 1) as *const u8, &mut byte);
     }
     while p < end {
         // SAFETY: plain data filled in by the query.
@@ -1001,8 +1027,16 @@ mod tests {
             fill_linear_rgba(&layout, mem, v1);
         }
 
-        let staging = create_staging(&host, None, 0, std::ptr::null(), &copy.texture, layout.clone(), raw)
-            .expect("create staging");
+        let staging = create_staging(
+            &host,
+            None,
+            0,
+            std::ptr::null(),
+            &copy.texture,
+            layout.clone(),
+            raw,
+        )
+        .expect("create staging");
 
         let run_once = || {
             let list = host.new_list().expect("new list");

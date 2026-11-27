@@ -82,22 +82,22 @@ mod bitcode;
 mod container;
 #[cfg(all(test, windows))]
 mod diff_tests;
-#[cfg(test)]
-mod memory_tests;
-#[cfg(all(test, windows))]
-mod image_tests;
 #[cfg(all(windows, any(test, feature = "host")))]
 pub mod host;
 #[cfg(all(test, windows))]
-mod lds_tests;
+mod image_tests;
 #[cfg(all(test, windows))]
 mod lane_read_loop_tests;
+#[cfg(all(test, windows))]
+mod lds_tests;
 mod lower;
-mod rectangle;
+#[cfg(test)]
+mod memory_tests;
 #[cfg(test)]
 mod opcode_audit;
 #[cfg(all(test, windows))]
 mod opcode_tests;
+mod rectangle;
 mod sampler;
 #[cfg(all(test, windows))]
 mod scratch_tests;
@@ -203,7 +203,6 @@ pub const VIEW_SLOTS: u32 = 2_294_784;
 /// Those before the views of memory by address, which programs without
 /// such views stay below.
 pub const OWN_SLOTS: u32 = VIEW_SLOTS - 1024;
-
 
 /// Whether heap indices are kept below [`VIEW_SLOTS`]: skinning programs
 /// take them from title data, and one past the heap stops the host GPU.
@@ -402,9 +401,7 @@ fn emit_program(
     // (`SV_DepthGreaterEqual`/`SV_DepthLessEqual`) require centroid or sample
     // interpolation on `SV_Position`.
     let conservative_depth = pixel && outputs.iter().any(|o| matches!(o.kind, 18 | 19));
-    let psv_modes = c
-        .part(FourCC::PSV0)
-        .and_then(|p| psv_interp(p.data, pixel));
+    let psv_modes = c.part(FourCC::PSV0).and_then(|p| psv_interp(p.data, pixel));
     let interpolated = if pixel { &mut inputs } else { &mut outputs };
     for e in interpolated.iter_mut() {
         e.interp = match (e.kind, e.comp) {
@@ -424,9 +421,9 @@ fn emit_program(
             _ => 0,
         };
         if let Some(modes) = &psv_modes
-            && let Some(&(_, _, _, m)) = modes
-                .iter()
-                .find(|&&(row, col, kind, m)| row == e.row && col == e.col && kind == e.kind && m != 0)
+            && let Some(&(_, _, _, m)) = modes.iter().find(|&&(row, col, kind, m)| {
+                row == e.row && col == e.col && kind == e.kind && m != 0
+            })
         {
             e.interp = if e.kind == 3 && conservative_depth && m == 4 {
                 5

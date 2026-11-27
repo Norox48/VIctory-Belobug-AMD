@@ -135,7 +135,8 @@ fn lower_test_shader(native: &NativeProgram, parts: &[(crate::FourCC, &[u8])]) -
     let res = resource::track(&p, &native.layout, native.stage).unwrap();
     let io = io::raise(&p, native).unwrap();
     let st = structure::structure(&p).unwrap();
-    let shader = super::emit(&container, native, &p, &st, &io, &res, super::Target::ANY).expect("emit");
+    let shader =
+        super::emit(&container, native, &p, &st, &io, &res, super::Target::ANY).expect("emit");
 
     if let Ok(mut v) = validator::Validator::load(validator::Validator::default_path().as_deref()) {
         let mut copy = shader.dxil.clone();
@@ -1037,13 +1038,17 @@ fn v_cmp_f32_nan_matches_rdna2() {
     ] {
         let cmp = vop3(opc, 6, vgpr(1), vgpr(1), 0);
         let sh = build_valu_cs(&[cmp[0], cmp[1], sel[0], sel[1]]);
-        run_cases(&sh, &[[nan, 0, 0, 0], [one, 0, 0, 0]], |backend, i, _, got| {
-            let want = if i == 0 { want_nan } else { want_one };
-            assert_eq!(
-                got, want,
-                "{backend}: {name}(same reg, case {i}) = {got}, want {want}",
-            );
-        });
+        run_cases(
+            &sh,
+            &[[nan, 0, 0, 0], [one, 0, 0, 0]],
+            |backend, i, _, got| {
+                let want = if i == 0 { want_nan } else { want_one };
+                assert_eq!(
+                    got, want,
+                    "{backend}: {name}(same reg, case {i}) = {got}, want {want}",
+                );
+            },
+        );
     }
 
     // Distinct-register ordered/unordered comparisons: Intel Xe also folds

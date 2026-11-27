@@ -974,7 +974,11 @@ impl Module {
         if std::env::var_os("VICTORY_SHADER_OPT_TRACE").is_some() {
             let mut gone: std::collections::BTreeMap<String, u32> = Default::default();
             for (b, blk) in self.blocks.iter().enumerate() {
-                for &i in blk.body.iter().filter(|&&i| !reached[b] || !live[i as usize]) {
+                for &i in blk
+                    .body
+                    .iter()
+                    .filter(|&&i| !reached[b] || !live[i as usize])
+                {
                     let what = match &self.insts[i as usize].op {
                         Op::Call(f, _) => self.funcs[*f as usize].name.clone(),
                         Op::Load(_) => "load".into(),

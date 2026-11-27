@@ -10,9 +10,7 @@ use anyhow::Result;
 use victory_shader::emit::host::{self, Host};
 use victory_shader::emit::{self, validator::Validator};
 use victory_shader::structure::{self, Atom, LaneExit};
-use victory_shader::{
-    Container, FourCC, HwStage, NativeProgram, RootType, ShaderError, ir,
-};
+use victory_shader::{Container, FourCC, HwStage, NativeProgram, RootType, ShaderError, ir};
 use victory_shader::{io, resource};
 
 use crate::shader::{MAX_FILE, Source, sources};
@@ -321,7 +319,10 @@ pub fn run(
 /// The instructions around `offset` (`VICTORY_AROUND=<count>`, before and
 /// half as many after), with the block each starts in.
 fn disassemble(p: &ir::Program, offset: usize) {
-    let Some(around) = std::env::var("VICTORY_AROUND").ok().and_then(|v| v.parse::<usize>().ok()) else {
+    let Some(around) = std::env::var("VICTORY_AROUND")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+    else {
         return;
     };
     let all: Vec<(usize, &ir::Inst)> = p

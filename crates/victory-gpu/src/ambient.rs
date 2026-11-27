@@ -44,7 +44,11 @@ pub(crate) fn level() -> Option<f32> {
         if set.trim() == "off" {
             return -1.0;
         }
-        set.trim().parse().ok().filter(|l: &f32| l.is_finite() && *l >= 0.0).unwrap_or(DEFAULT)
+        set.trim()
+            .parse()
+            .ok()
+            .filter(|l: &f32| l.is_finite() && *l >= 0.0)
+            .unwrap_or(DEFAULT)
     });
     (level >= 0.0).then_some(level)
 }
@@ -129,14 +133,21 @@ static SKY_IMAGE: std::sync::Mutex<Option<std::sync::Arc<crate::resource::HostTe
     std::sync::Mutex::new(None);
 
 pub(crate) fn sky_drawn(image: usize) {
-    let Some(copy) = crate::resource::host_copy(image as This) else { return };
+    let Some(copy) = crate::resource::host_copy(image as This) else {
+        return;
+    };
     // SAFETY: a live resource.
     let d = unsafe { copy.texture.GetDesc() };
-    if d.Format != DXGI_FORMAT_R16G16B16A16_FLOAT || d.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D {
+    if d.Format != DXGI_FORMAT_R16G16B16A16_FLOAT
+        || d.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D
+    {
         return;
     }
     let mut held = SKY_IMAGE.lock().unwrap_or_else(|e| e.into_inner());
-    if !held.as_ref().is_some_and(|h| std::sync::Arc::ptr_eq(h, &copy)) {
+    if !held
+        .as_ref()
+        .is_some_and(|h| std::sync::Arc::ptr_eq(h, &copy))
+    {
         *held = Some(copy);
     }
 }
@@ -217,54 +228,65 @@ fn live_level() -> Option<f32> {
         if !cfg!(feature = "diagnostics") {
             return;
         }
-        let Some(file) = std::env::var_os("VICTORY_AMBIENT_FILE") else { return };
-        let _ = std::thread::Builder::new().name("victory-ambient".into()).spawn(move || {
-            loop {
-                let read: Vec<f32> = std::fs::read_to_string(&file)
-                    .unwrap_or_default()
-                    .split_whitespace()
-                    .filter_map(|v| v.parse().ok())
-                    .collect();
-                // Two, three, six or seven numbers: gain, least, a power if
-                // their count is odd, then the shading's four.
-                if let [gain, least, ref rest @ ..] = read[..]
-                    && matches!(rest.len(), 0 | 1 | 4 | 5)
-                {
-                    let (power, rest) = match rest.len() % 2 {
-                        1 => (rest[0], &rest[1..]),
-                        _ => (0.4, rest),
-                    };
-                    if let [s, r, n, t] = rest[..] {
-                        *SHADE.lock().unwrap_or_else(|e| e.into_inner()) = Some([s, r, n, t]);
-                    }
-                    let new = Some(Some([gain, least, power]));
-                    let mut follow = FOLLOW.lock().unwrap_or_else(|e| e.into_inner());
-                    if *follow != new {
-                        tracing::info!(gain, least, power, "ambient light follows the sky, set from the file");
-                        *follow = new;
-                    }
-                } else if let [level, r, g, b, ref rest @ ..] = read[..] {
-                    *FOLLOW.lock().unwrap_or_else(|e| e.into_inner()) = Some(None);
-                    if let [s, r, n, t, ref last @ ..] = rest[..] {
-                        *SHADE.lock().unwrap_or_else(|e| e.into_inner()) = Some([s, r, n, t]);
-                        if let [k, ref floor @ ..] = last[..] {
-                            *KEEP.lock().unwrap_or_else(|e| e.into_inner()) = Some(k.max(0.0));
-                            *LEAST.lock().unwrap_or_else(|e| e.into_inner()) =
-                                floor.first().map_or(0.0, |f| f.max(0.0));
+        let Some(file) = std::env::var_os("VICTORY_AMBIENT_FILE") else {
+            return;
+        };
+        let _ = std::thread::Builder::new()
+            .name("victory-ambient".into())
+            .spawn(move || {
+                loop {
+                    let read: Vec<f32> = std::fs::read_to_string(&file)
+                        .unwrap_or_default()
+                        .split_whitespace()
+                        .filter_map(|v| v.parse().ok())
+                        .collect();
+                    // Two, three, six or seven numbers: gain, least, a power if
+                    // their count is odd, then the shading's four.
+                    if let [gain, least, ref rest @ ..] = read[..]
+                        && matches!(rest.len(), 0 | 1 | 4 | 5)
+                    {
+                        let (power, rest) = match rest.len() % 2 {
+                            1 => (rest[0], &rest[1..]),
+                            _ => (0.4, rest),
+                        };
+                        if let [s, r, n, t] = rest[..] {
+                            *SHADE.lock().unwrap_or_else(|e| e.into_inner()) = Some([s, r, n, t]);
+                        }
+                        let new = Some(Some([gain, least, power]));
+                        let mut follow = FOLLOW.lock().unwrap_or_else(|e| e.into_inner());
+                        if *follow != new {
+                            tracing::info!(
+                                gain,
+                                least,
+                                power,
+                                "ambient light follows the sky, set from the file"
+                            );
+                            *follow = new;
+                        }
+                    } else if let [level, r, g, b, ref rest @ ..] = read[..] {
+                        *FOLLOW.lock().unwrap_or_else(|e| e.into_inner()) = Some(None);
+                        if let [s, r, n, t, ref last @ ..] = rest[..] {
+                            *SHADE.lock().unwrap_or_else(|e| e.into_inner()) = Some([s, r, n, t]);
+                            if let [k, ref floor @ ..] = last[..] {
+                                *KEEP.lock().unwrap_or_else(|e| e.into_inner()) = Some(k.max(0.0));
+                                *LEAST.lock().unwrap_or_else(|e| e.into_inner()) =
+                                    floor.first().map_or(0.0, |f| f.max(0.0));
+                            }
+                        }
+                        let new = Some((level.max(0.0), [r, g, b]));
+                        let mut live = LIVE.lock().unwrap_or_else(|e| e.into_inner());
+                        if *live != new {
+                            tracing::info!(level, r, g, b, "ambient light set from the file");
+                            *live = new;
                         }
                     }
-                    let new = Some((level.max(0.0), [r, g, b]));
-                    let mut live = LIVE.lock().unwrap_or_else(|e| e.into_inner());
-                    if *live != new {
-                        tracing::info!(level, r, g, b, "ambient light set from the file");
-                        *live = new;
-                    }
+                    std::thread::sleep(std::time::Duration::from_millis(500));
                 }
-                std::thread::sleep(std::time::Duration::from_millis(500));
-            }
-        });
+            });
     });
-    LIVE.lock().unwrap_or_else(|e| e.into_inner()).map(|(level, _)| level)
+    LIVE.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .map(|(level, _)| level)
 }
 
 const SOURCE: &str = r#"
@@ -521,9 +543,17 @@ fn record(list: &HostList, light: This, depth: Option<This>, held: f32) -> bool 
     });
     static FOLLOWS: std::sync::Once = std::sync::Once::new();
     if let Some((t, f, _)) = sky {
-        FOLLOWS.call_once(|| tracing::info!(gain = f[0], least = f[1], power = f[2], "ambient light follows the sky"));
+        FOLLOWS.call_once(|| {
+            tracing::info!(
+                gain = f[0],
+                least = f[1],
+                power = f[2],
+                "ambient light follows the sky"
+            )
+        });
         list.keep(t);
-        let read = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE.0 | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE.0;
+        let read = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE.0
+            | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE.0;
         if let Some(copy) = &sky_image
             && let Some(before) = list.transition_copy(copy, read as u32)
         {
@@ -570,21 +600,34 @@ fn record(list: &HostList, light: This, depth: Option<This>, held: f32) -> bool 
             ViewDimension: D3D12_SRV_DIMENSION_TEXTURE2D,
             Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
             Anonymous: D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
-                Texture2D: D3D12_TEX2D_SRV { MipLevels: 1, ..Default::default() },
+                Texture2D: D3D12_TEX2D_SRV {
+                    MipLevels: 1,
+                    ..Default::default()
+                },
             },
         };
-        let beside = D3D12_CPU_DESCRIPTOR_HANDLE { ptr: at.ptr + pass.step as usize };
-        host.device.CreateShaderResourceView(depth, Some(&seen), beside);
+        let beside = D3D12_CPU_DESCRIPTOR_HANDLE {
+            ptr: at.ptr + pass.step as usize,
+        };
+        host.device
+            .CreateShaderResourceView(depth, Some(&seen), beside);
         let around = D3D12_SHADER_RESOURCE_VIEW_DESC {
             Format: sky.map_or(DXGI_FORMAT_R16G16B16A16_FLOAT, |s| s.2),
             ViewDimension: D3D12_SRV_DIMENSION_TEXTURE2DARRAY,
             Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
             Anonymous: D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
-                Texture2DArray: D3D12_TEX2D_ARRAY_SRV { MipLevels: 1, ArraySize: 1, ..Default::default() },
+                Texture2DArray: D3D12_TEX2D_ARRAY_SRV {
+                    MipLevels: 1,
+                    ArraySize: 1,
+                    ..Default::default()
+                },
             },
         };
-        let third = D3D12_CPU_DESCRIPTOR_HANDLE { ptr: at.ptr + 2 * pass.step as usize };
-        host.device.CreateShaderResourceView(sky.map(|s| s.0), Some(&around), third);
+        let third = D3D12_CPU_DESCRIPTOR_HANDLE {
+            ptr: at.ptr + 2 * pass.step as usize,
+        };
+        host.device
+            .CreateShaderResourceView(sky.map(|s| s.0), Some(&around), third);
         l.SetDescriptorHeaps(&[Some(pass.views.clone())]);
         l.SetComputeRootSignature(&pass.root);
         l.SetPipelineState(&pass.pso);
@@ -594,7 +637,9 @@ fn record(list: &HostList, light: This, depth: Option<This>, held: f32) -> bool 
         let strength = if depth.is_some() { strength } else { 0.0 };
         let [gain, least, power] = sky.map_or([0.0, 0.0, 1.0], |s| s.1);
         let floor = *LEAST.lock().unwrap_or_else(|e| e.into_inner());
-        let constants = [level, r, g, b, strength, radius, near, tan_y, gain, least, held, floor, power];
+        let constants = [
+            level, r, g, b, strength, radius, near, tan_y, gain, least, held, floor, power,
+        ];
         l.SetComputeRoot32BitConstants(0, 13, constants.as_ptr().cast(), 0);
         l.SetComputeRootDescriptorTable(
             1,

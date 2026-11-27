@@ -259,7 +259,9 @@ fn host_lacks_target(format: u32) -> bool {
         return false;
     };
     *LACKS[i].get_or_init(|| {
-        let Some(host) = crate::host::host() else { return false };
+        let Some(host) = crate::host::host() else {
+            return false;
+        };
         let mut support = D3D12_FEATURE_DATA_FORMAT_SUPPORT {
             Format: DXGI_FORMAT(format as i32),
             ..Default::default()
@@ -272,10 +274,14 @@ fn host_lacks_target(format: u32) -> bool {
                 size_of::<D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as u32,
             )
         };
-        let needed = D3D12_FORMAT_SUPPORT1_RENDER_TARGET.0 | D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW.0;
+        let needed = D3D12_FORMAT_SUPPORT1_RENDER_TARGET.0
+            | D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW.0;
         let lacks = asked.is_err() || support.Support1.0 & needed != needed;
         if lacks {
-            tracing::info!(format, "packed 16-bit render targets are R8G8B8A8_UNORM on this GPU");
+            tracing::info!(
+                format,
+                "packed 16-bit render targets are R8G8B8A8_UNORM on this GPU"
+            );
         }
         lacks
     })
@@ -878,10 +884,20 @@ fn target_at(address: u64, d: &ResourceDesc) -> Option<This> {
         .map(|&r| r as This)
         .filter(|&r| {
             let o = &resource(r).desc;
-            (o.dimension, o.width, o.height, o.depth_or_array_size, o.mip_levels)
-                == (d.dimension, d.width, d.height, d.depth_or_array_size, d.mip_levels)
-                && (family(o.format) == family(d.format)
-                    || d.format == SHARED_EXPONENT && (39..=43).contains(&o.format))
+            (
+                o.dimension,
+                o.width,
+                o.height,
+                o.depth_or_array_size,
+                o.mip_levels,
+            ) == (
+                d.dimension,
+                d.width,
+                d.height,
+                d.depth_or_array_size,
+                d.mip_levels,
+            ) && (family(o.format) == family(d.format)
+                || d.format == SHARED_EXPONENT && (39..=43).contains(&o.format))
         })
         .max_by_key(|&r| {
             resource(r)
@@ -1029,7 +1045,14 @@ static CENSUS: std::sync::LazyLock<std::sync::Mutex<Census>> =
 fn census(texture: &windows::Win32::Graphics::Direct3D12::ID3D12Resource, bytes: i64) {
     // SAFETY: a live resource.
     let d = unsafe { texture.GetDesc() };
-    let key = (d.Width, d.Height, d.DepthOrArraySize, d.MipLevels, d.Format.0, d.Flags.0 as u32);
+    let key = (
+        d.Width,
+        d.Height,
+        d.DepthOrArraySize,
+        d.MipLevels,
+        d.Format.0,
+        d.Flags.0 as u32,
+    );
     let mut all = CENSUS.lock().unwrap_or_else(|e| e.into_inner());
     let e = all.entry(key).or_default();
     e.0 += bytes.signum();
@@ -1045,9 +1068,21 @@ pub(crate) fn census_log() {
     for (k, e) in v.iter().take(40) {
         tracing::info!("textures {k:?}: {} of {} MiB", e.0, e.1 >> 20);
     }
-    let targets: i64 = v.iter().filter(|(k, _)| k.5 & 7 != 0).map(|(_, e)| e.1).sum();
-    let small: i64 = v.iter().filter(|(_, e)| e.1 / e.0.max(1) <= 65536).map(|(_, e)| e.1).sum();
-    tracing::info!("textures with target or write flags {} MiB, of 64 KiB each {} MiB", targets >> 20, small >> 20);
+    let targets: i64 = v
+        .iter()
+        .filter(|(k, _)| k.5 & 7 != 0)
+        .map(|(_, e)| e.1)
+        .sum();
+    let small: i64 = v
+        .iter()
+        .filter(|(_, e)| e.1 / e.0.max(1) <= 65536)
+        .map(|(_, e)| e.1)
+        .sum();
+    tracing::info!(
+        "textures with target or write flags {} MiB, of 64 KiB each {} MiB",
+        targets >> 20,
+        small >> 20
+    );
 }
 
 /// The driver's allocation size for `texture`.
@@ -1100,7 +1135,9 @@ pub(crate) fn depth_twin<'a>(this: This) -> Option<&'a crate::twin::Twin> {
         return None;
     }
     let host = r.host.as_deref()?;
-    host.twin.get_or_init(|| crate::twin::make(&host.texture)).as_ref()
+    host.twin
+        .get_or_init(|| crate::twin::make(&host.texture))
+        .as_ref()
 }
 
 /// A title texture's host copy, shared, for a list to hold.
@@ -1128,7 +1165,10 @@ fn video_memory_percent() -> u64 {
     static LAST: std::sync::Mutex<(Option<std::time::Instant>, u64)> =
         std::sync::Mutex::new((None, 0));
     let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
-    if last.0.is_none_or(|at| at.elapsed() > std::time::Duration::from_millis(50)) {
+    if last
+        .0
+        .is_none_or(|at| at.elapsed() > std::time::Duration::from_millis(50))
+    {
         last.0 = Some(std::time::Instant::now());
         if let Some([(used, budget), _]) = crate::host::video_memory() {
             last.1 = used * 100 / budget.max(1);
@@ -1779,7 +1819,10 @@ pub(crate) fn texture_at(address: u64, desc: &[u32; 14], largest: u32) -> Option
         resource_release(out);
         return Some(r as This);
     }
-    PLACED_LIVE.lock().unwrap_or_else(|e| e.into_inner()).insert(out as usize);
+    PLACED_LIVE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(out as usize);
     PLACED_LONGEST.fetch_max(end - address, std::sync::atomic::Ordering::AcqRel);
     map.insert((address, *desc), (out as usize, end));
     crate::memstat::PLACED_COUNT.store(map.len() as u64, std::sync::atomic::Ordering::Relaxed);
@@ -1929,7 +1972,10 @@ pub(crate) fn placed_census() {
     tracing::info!(
         "placed textures hold {} MiB on the host; over twice their title memory, by title format (count, title MiB, host MiB): {:?}",
         host_bytes >> 20,
-        heavy.iter().map(|&(f, (n, t, h))| (f, n, t >> 20, h >> 20)).collect::<Vec<_>>()
+        heavy
+            .iter()
+            .map(|&(f, (n, t, h))| (f, n, t >> 20, h >> 20))
+            .collect::<Vec<_>>()
     );
     let mb = |b: u64| b >> 20;
     let total: u64 = entries.iter().map(|&(a, e, _)| e - a).sum();
@@ -1968,7 +2014,9 @@ pub(crate) fn placed_census() {
             reach = e;
         }
     }
-    for (what, (held, used, slabs, worst)) in ["textures", "staging"].iter().zip(crate::texpool::census()) {
+    for (what, (held, used, slabs, worst)) in
+        ["textures", "staging"].iter().zip(crate::texpool::census())
+    {
         tracing::info!(
             "texture pool, {what}: {} MiB in {slabs} slabs, {} MiB of them in use; most waste in slots of {} KiB: {} MiB held, {} MiB used",
             mb(held),
@@ -2441,7 +2489,6 @@ mod tests {
         assert_eq!(t, u64::MAX, "no second subresource");
     }
 
-
     /// A 4x4 texture filled from a title buffer through our list and queue,
     /// then read back from the host GPU.
     #[cfg(windows)]
@@ -2664,23 +2711,68 @@ mod tests {
         let (mut image, mut upload_buf, mut dst_aligned, mut dst_packed, mut dst_crop) =
             (null, null, null, null, null);
         assert_eq!(
-            create_committed(null, &PROPERTIES, 0, &tex_desc, 0, null.cast(), iid, &mut image),
+            create_committed(
+                null,
+                &PROPERTIES,
+                0,
+                &tex_desc,
+                0,
+                null.cast(),
+                iid,
+                &mut image
+            ),
             S_OK
         );
         assert_eq!(
-            create_committed(null, &PROPERTIES, 0, &buffer(1024), 0, null.cast(), iid, &mut upload_buf),
+            create_committed(
+                null,
+                &PROPERTIES,
+                0,
+                &buffer(1024),
+                0,
+                null.cast(),
+                iid,
+                &mut upload_buf
+            ),
             S_OK
         );
         assert_eq!(
-            create_committed(null, &PROPERTIES, 0, &buffer(2048), 0, null.cast(), iid, &mut dst_aligned),
+            create_committed(
+                null,
+                &PROPERTIES,
+                0,
+                &buffer(2048),
+                0,
+                null.cast(),
+                iid,
+                &mut dst_aligned
+            ),
             S_OK
         );
         assert_eq!(
-            create_committed(null, &PROPERTIES, 0, &buffer(256), 0, null.cast(), iid, &mut dst_packed),
+            create_committed(
+                null,
+                &PROPERTIES,
+                0,
+                &buffer(256),
+                0,
+                null.cast(),
+                iid,
+                &mut dst_packed
+            ),
             S_OK
         );
         assert_eq!(
-            create_committed(null, &PROPERTIES, 0, &buffer(1024), 0, null.cast(), iid, &mut dst_crop),
+            create_committed(
+                null,
+                &PROPERTIES,
+                0,
+                &buffer(1024),
+                0,
+                null.cast(),
+                iid,
+                &mut dst_crop
+            ),
             S_OK
         );
 
@@ -2739,8 +2831,15 @@ mod tests {
             kind: u32,
             footprint: PlacedFootprint,
         }
-        type Copy =
-            extern "system" fn(This, *const Location, u32, u32, u32, *const Location, *const [u32; 6]);
+        type Copy = extern "system" fn(
+            This,
+            *const Location,
+            u32,
+            u32,
+            u32,
+            *const Location,
+            *const [u32; 6],
+        );
         let copy = slot::<Copy>(list, 0x80);
 
         let full_rows = PlacedFootprint {
@@ -2754,7 +2853,10 @@ mod tests {
         let tex_loc = Location {
             resource: image,
             kind: 0,
-            footprint: PlacedFootprint { offset: 0, ..full_rows },
+            footprint: PlacedFootprint {
+                offset: 0,
+                ..full_rows
+            },
         };
         let up_loc = Location {
             resource: upload_buf,
@@ -2819,7 +2921,14 @@ mod tests {
                 let mut output = null;
                 assert_eq!(
                     create_committed(
-                        null, &PROPERTIES, 0, &buffer(size), 0, null.cast(), iid, &mut output,
+                        null,
+                        &PROPERTIES,
+                        0,
+                        &buffer(size),
+                        0,
+                        null.cast(),
+                        iid,
+                        &mut output,
                     ),
                     S_OK
                 );
@@ -2841,7 +2950,16 @@ mod tests {
         // (45..=47): skipped cleanly without breaking Close() or touching dst.
         let mut dst_d16s8 = null;
         assert_eq!(
-            create_committed(null, &PROPERTIES, 0, &buffer(1024), 0, null.cast(), iid, &mut dst_d16s8),
+            create_committed(
+                null,
+                &PROPERTIES,
+                0,
+                &buffer(1024),
+                0,
+                null.cast(),
+                iid,
+                &mut dst_d16s8
+            ),
             S_OK
         );
         let d16s8_loc = Location {
@@ -2858,27 +2976,44 @@ mod tests {
         };
         copy(list, &d16s8_loc, 0, 0, 0, &tex_loc, std::ptr::null());
 
-        assert_eq!(slot::<extern "system" fn(This) -> HRESULT>(list, 0x48)(list), S_OK);
+        assert_eq!(
+            slot::<extern "system" fn(This) -> HRESULT>(list, 0x48)(list),
+            S_OK
+        );
         slot::<extern "system" fn(This, u32, *const This)>(queue, 0x50)(queue, 1, &list);
 
         // Verify 256-aligned readback at offset 256 (leading 256 bytes untouched).
         let (al_ptr, _) = buffer_bytes(dst_aligned).unwrap();
         // SAFETY: dst_aligned holds 2048 bytes.
         let al = unsafe { std::slice::from_raw_parts(al_ptr, 2048) };
-        assert!(al[..256].iter().all(|&b| b == 0), "bytes before offset touched");
+        assert!(
+            al[..256].iter().all(|&b| b == 0),
+            "bytes before offset touched"
+        );
         for row in 0..4 {
             let at = 256 + row * 256;
-            assert_eq!(al[at..at + 16], up[row * 256..row * 256 + 16], "aligned row {row}");
+            assert_eq!(
+                al[at..at + 16],
+                up[row * 256..row * 256 + 16],
+                "aligned row {row}"
+            );
         }
 
         // Verify unaligned packed readback (row_pitch 16, offset 32).
         let (pk_ptr, _) = buffer_bytes(dst_packed).unwrap();
         // SAFETY: dst_packed holds 256 bytes.
         let pk = unsafe { std::slice::from_raw_parts(pk_ptr, 256) };
-        assert!(pk[..32].iter().all(|&b| b == 0), "bytes before packed offset touched");
+        assert!(
+            pk[..32].iter().all(|&b| b == 0),
+            "bytes before packed offset touched"
+        );
         for row in 0..4 {
             let at = 32 + row * 16;
-            assert_eq!(pk[at..at + 16], up[row * 256..row * 256 + 16], "packed row {row}");
+            assert_eq!(
+                pk[at..at + 16],
+                up[row * 256..row * 256 + 16],
+                "packed row {row}"
+            );
         }
 
         // Verify 2x2 sub-box crop from (1, 1)..(3, 3).
@@ -2888,14 +3023,21 @@ mod tests {
         for row in 0..2 {
             let src_at = (row + 1) * 256 + 4; // x=1, y=row+1
             let dst_at = row * 256;
-            assert_eq!(cr[dst_at..dst_at + 8], up[src_at..src_at + 8], "crop row {row}");
+            assert_eq!(
+                cr[dst_at..dst_at + 8],
+                up[src_at..src_at + 8],
+                "crop row {row}"
+            );
         }
 
         // Verify skipped 118..=120 readback left its buffer untouched.
         let (d16_ptr, _) = buffer_bytes(dst_d16s8).unwrap();
         // SAFETY: dst_d16s8 holds 1024 bytes.
         let d16 = unsafe { std::slice::from_raw_parts(d16_ptr, 1024) };
-        assert!(d16.iter().all(|&b| b == 0), "mismatched format 118 buffer touched");
+        assert!(
+            d16.iter().all(|&b| b == 0),
+            "mismatched format 118 buffer touched"
+        );
 
         for (output, footprint, dst_x, dst_y, region) in partials {
             let [left, top, _, right, bottom, _] = region.unwrap_or([0, 0, 0, 4, 4, 1]);
@@ -2914,7 +3056,8 @@ mod tests {
                         &[0xa5; 4]
                     };
                     assert_eq!(
-                        &pixels[at..at + 4], expected,
+                        &pixels[at..at + 4],
+                        expected,
                         "pixel ({x}, {y}) in {footprint:?}"
                     );
                 }

@@ -88,8 +88,10 @@ pub fn rectangle_geometry(vs: &[u8]) -> Option<Vec<u8>> {
                     _ => {
                         let c = input(&mut s, id, e, col, corner);
                         if e.comp == 9 {
-                            let (p, q) =
-                                (input(&mut s, id, e, col, one), input(&mut s, id, e, col, two));
+                            let (p, q) = (
+                                input(&mut s, id, e, col, one),
+                                input(&mut s, id, e, col, two),
+                            );
                             let sum = s.m.bin(b, Bin::Add, p, q);
                             s.m.bin(b, Bin::Sub, sum, c)
                         } else {
@@ -275,7 +277,11 @@ mod tests {
                 for (i, t) in texels.iter().enumerate() {
                     let (px, py) = (i % n, i / n);
                     let inside = (4..12).contains(&px) && (4..12).contains(&py);
-                    assert_eq!(t[3] == 1.0 && t[2] == 1.0, inside, "corner {corner} {px},{py}: {t:?}");
+                    assert_eq!(
+                        t[3] == 1.0 && t[2] == 1.0,
+                        inside,
+                        "corner {corner} {px},{py}: {t:?}"
+                    );
                     if inside {
                         let x = (px as f32 + 0.5) / n as f32 * 2.0 - 1.0;
                         let y = 1.0 - (py as f32 + 0.5) / n as f32 * 2.0;

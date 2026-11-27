@@ -127,7 +127,10 @@ struct Submission {
 #[cfg(windows)]
 impl crate::timeline::Lists for Submission {
     fn ready(&self) -> usize {
-        self.runs.iter().take_while(|l| l.unmet().is_empty()).count()
+        self.runs
+            .iter()
+            .take_while(|l| l.unmet().is_empty())
+            .count()
     }
     fn len(&self) -> usize {
         self.runs.len()
@@ -140,7 +143,11 @@ impl crate::timeline::Lists for Submission {
         Box::new(move || host.execute_title(&runs.iter().map(|l| l.shared()).collect::<Vec<_>>()))
     }
     fn waits(&self) -> String {
-        self.runs.iter().map(|l| l.script()).collect::<Vec<_>>().join(" || ")
+        self.runs
+            .iter()
+            .map(|l| l.script())
+            .collect::<Vec<_>>()
+            .join(" || ")
     }
 }
 
@@ -153,7 +160,10 @@ extern "system" fn execute(this: This, count: u32, lists: *const This) {
     if let Some(host) = crate::host::host() {
         // SAFETY: the title passes `count` lists.
         let lists = unsafe { std::slice::from_raw_parts(lists, count as usize) };
-        let runs: VecDeque<_> = lists.iter().flat_map(|&l| crate::list::submitted(l)).collect();
+        let runs: VecDeque<_> = lists
+            .iter()
+            .flat_map(|&l| crate::list::submitted(l))
+            .collect();
         queue(this)
             .timeline
             .submit(Op::Lists(Box::new(Submission { host, runs })));
@@ -340,7 +350,9 @@ extern "system" fn present(
     if planes > 1 && !plane_parameters.is_null() {
         over = second_plane(plane_parameters).map(object::Ref::new);
         static ONCE: std::sync::Once = std::sync::Once::new();
-        ONCE.call_once(|| tracing::info!(planes, found = over.is_some(), "several planes presented"));
+        ONCE.call_once(|| {
+            tracing::info!(planes, found = over.is_some(), "several planes presented")
+        });
     }
     if planes > 0
         // SAFETY: the title passes `planes` plane descriptions.
@@ -440,7 +452,10 @@ fn show(shown: Option<object::Ref>, over: Option<object::Ref>) {
 #[cfg(windows)]
 fn plane(
     resource: Option<&object::Ref>,
-) -> Option<(&'static windows::Win32::Graphics::Direct3D12::ID3D12Resource, u32)> {
+) -> Option<(
+    &'static windows::Win32::Graphics::Direct3D12::ID3D12Resource,
+    u32,
+)> {
     let resource = resource?.get();
     let texture = crate::resource::host_resource(resource)?;
     const COPY_SOURCE: u32 = 0x800;

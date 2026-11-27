@@ -1356,7 +1356,10 @@ impl Host {
                                 D3D12_BUFFER_UAV_FLAG_NONE,
                             ),
                             View::StructuredUav(e, stride) => (
-                                e * stride / 4, DXGI_FORMAT_UNKNOWN, e, stride,
+                                e * stride / 4,
+                                DXGI_FORMAT_UNKNOWN,
+                                e,
+                                stride,
                                 D3D12_BUFFER_UAV_FLAG_NONE,
                             ),
                             View::RawUav(n) => {

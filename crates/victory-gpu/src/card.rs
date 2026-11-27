@@ -419,22 +419,23 @@ impl CardEngine {
         drop(std::mem::ManuallyDrop::into_inner(pso_desc.pRootSignature));
         let pso = pso_res?;
 
-        let make_pair = || -> windows::core::Result<(ID3D12CommandAllocator, ID3D12GraphicsCommandList)> {
-            // SAFETY: plain direct command allocator and list creation.
-            unsafe {
-                let alloc: ID3D12CommandAllocator = host
-                    .device
-                    .CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)?;
-                let list: ID3D12GraphicsCommandList = host.device.CreateCommandList(
-                    0,
-                    D3D12_COMMAND_LIST_TYPE_DIRECT,
-                    &alloc,
-                    None,
-                )?;
-                list.Close()?;
-                Ok((alloc, list))
-            }
-        };
+        let make_pair =
+            || -> windows::core::Result<(ID3D12CommandAllocator, ID3D12GraphicsCommandList)> {
+                // SAFETY: plain direct command allocator and list creation.
+                unsafe {
+                    let alloc: ID3D12CommandAllocator = host
+                        .device
+                        .CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)?;
+                    let list: ID3D12GraphicsCommandList = host.device.CreateCommandList(
+                        0,
+                        D3D12_COMMAND_LIST_TYPE_DIRECT,
+                        &alloc,
+                        None,
+                    )?;
+                    list.Close()?;
+                    Ok((alloc, list))
+                }
+            };
         let (before_alloc, before_list) = make_pair()?;
         let (after_alloc, after_list) = make_pair()?;
         let (fetch_alloc, fetch_list) = make_pair()?;
@@ -486,7 +487,11 @@ impl CardEngine {
         true
     }
 
-    fn ensure_fetch_capacity(&mut self, host: &Host, needed_bytes: u64) -> Option<(ID3D12Resource, usize)> {
+    fn ensure_fetch_capacity(
+        &mut self,
+        host: &Host,
+        needed_bytes: u64,
+    ) -> Option<(ID3D12Resource, usize)> {
         if let Some((ref res, ptr, cap)) = self.fetch_rb
             && needed_bytes <= cap
         {
@@ -740,7 +745,11 @@ impl CardEngine {
 
     /// Records the post-submission GPU hash compare (`compare = 2`) and copies
     /// the tiny `differs` array to `differs_rb` (runs in the same GPU wait!).
-    pub(crate) fn record_after(&mut self, host: &Host, plan: &CardPlan) -> Option<ID3D12CommandList> {
+    pub(crate) fn record_after(
+        &mut self,
+        host: &Host,
+        plan: &CardPlan,
+    ) -> Option<ID3D12CommandList> {
         if plan.total_pieces == 0 {
             return None;
         }
@@ -910,7 +919,8 @@ impl CardEngine {
                         if let Some(g) = per_entry.iter_mut().find(|(i, _)| *i == run.entry_idx) {
                             g.1.push((run.first_piece, run.count, ptr));
                         } else {
-                            per_entry.push((run.entry_idx, vec![(run.first_piece, run.count, ptr)]));
+                            per_entry
+                                .push((run.entry_idx, vec![(run.first_piece, run.count, ptr)]));
                         }
                     }
                     let total_written = AtomicU64::new(0);
@@ -985,10 +995,8 @@ mod tests {
         merge_byte_ranges(&mut r);
         assert_eq!(r, vec![(50, 400)]);
 
-        let runs = byte_ranges_to_piece_runs(
-            &[(0, 10), (PAGE - 1, PAGE + 1), (3 * PAGE, 4 * PAGE)],
-            8,
-        );
+        let runs =
+            byte_ranges_to_piece_runs(&[(0, 10), (PAGE - 1, PAGE + 1), (3 * PAGE, 4 * PAGE)], 8);
         assert_eq!(runs, vec![(0, 2), (3, 1)]);
     }
 
@@ -1008,19 +1016,18 @@ mod tests {
 
         let (staging, staging_ptr) = host.shared_buffer(size).expect("staging buffer");
         let card = CardState::new_unchecked(&host, &staging, size, false).expect("card buffer");
-        let shadow = crate::shadow::Shadow::new_card_test(
-            card.clone(),
-            staging_ptr,
-            base as u64,
-            size,
-        );
+        let shadow =
+            crate::shadow::Shadow::new_card_test(card.clone(), staging_ptr, base as u64, size);
         let mut submitted = 0u64;
 
         // Phase 1: Initial CPU copy -> upload to VRAM + Wave64 hash, no GPU writes.
         shadow.copy_for_test(base, base + size as usize);
         shadow.writing(base, size as usize);
         let (before, plan) = engine.record_before(&host, &[(shadow.clone(), base, size as usize)]);
-        assert!(before.is_some(), "initial upload + hash must emit before list");
+        assert!(
+            before.is_some(),
+            "initial upload + hash must emit before list"
+        );
         assert_eq!(plan.total_pieces, pages as u32);
         let after = engine.record_after(&host, &plan).expect("after list");
         host.execute_and_wait_locked(before.unwrap(), &mut submitted);
@@ -1047,20 +1054,17 @@ mod tests {
                 .device
                 .CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, &alloc, None)
                 .expect("list");
-            list.CopyBufferRegion(
-                &card.vram,
-                (2 * PAGE + 128) as u64,
-                &patch_buf,
-                0,
-                4,
-            );
+            list.CopyBufferRegion(&card.vram, (2 * PAGE + 128) as u64, &patch_buf, 0, 4);
             list.Close().expect("close");
             let cmd: ID3D12CommandList = list.cast().expect("cast");
             // Execute immediately after record_before while alloc stays alive.
             shadow.writing(base, size as usize);
             let (before2, plan2) =
                 engine.record_before(&host, &[(shadow.clone(), base, size as usize)]);
-            assert!(before2.is_none(), "no CPU dirty uploads expected in phase 2");
+            assert!(
+                before2.is_none(),
+                "no CPU dirty uploads expected in phase 2"
+            );
             let after2 = engine.record_after(&host, &plan2).expect("after2");
             // Simulate concurrent CPU modification on page 2 while GPU runs.
             title[2 * PAGE + 256..2 * PAGE + 260].copy_from_slice(&[0x11, 0x22, 0x33, 0x44]);
@@ -1072,9 +1076,15 @@ mod tests {
                 std::slice::from_raw_parts(engine.differs_rb.1 as *const u32, pages).to_vec();
             assert_eq!(differs_2, vec![0, 0, 1, 0], "only page 2 should differ");
             let written_2 = engine.finish_back(&host, plan2, &mut submitted);
-            assert_eq!(written_2, 4, "tight dirty span should write exactly 4 GPU bytes");
+            assert_eq!(
+                written_2, 4,
+                "tight dirty span should write exactly 4 GPU bytes"
+            );
             assert_eq!(&title[2 * PAGE + 128..2 * PAGE + 132], &gpu_bytes);
-            assert_eq!(&title[2 * PAGE + 256..2 * PAGE + 260], &[0x11, 0x22, 0x33, 0x44]);
+            assert_eq!(
+                &title[2 * PAGE + 256..2 * PAGE + 260],
+                &[0x11, 0x22, 0x33, 0x44]
+            );
 
             // Phase 3: Next submission uploads merged concurrent CPU write on page 2
             // back to VRAM and re-hashes page 2 so subsequent compare reports 0 diffs.
@@ -1089,7 +1099,10 @@ mod tests {
             host.execute_and_wait_locked(before3.unwrap(), &mut submitted);
             host.execute_and_wait_locked(after3, &mut submitted);
             let written_3 = engine.finish_back(&host, plan3, &mut submitted);
-            assert_eq!(written_3, 0, "after re-upload + re-hash, 0 bytes should differ");
+            assert_eq!(
+                written_3, 0,
+                "after re-upload + re-hash, 0 bytes should differ"
+            );
 
             // Read back page 2 directly from VRAM and verify both GPU and CPU writes exist there.
             let (rb, rb_ptr) = host.readback_buffer(PAGE as u64).expect("verify rb");

@@ -20,7 +20,9 @@ use std::collections::HashMap;
 use std::mem::offset_of;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use crate::object::{self, E_INVALIDARG, E_NOTIMPL, HRESULT, Iid, Object, PIPELINE, Table, This, guid};
+use crate::object::{
+    self, E_INVALIDARG, E_NOTIMPL, HRESULT, Iid, Object, PIPELINE, Table, This, guid,
+};
 use crate::resource::PAGEABLE_IIDS;
 
 const PIPELINE_IIDS: [Iid; 4] = [
@@ -172,11 +174,16 @@ fn swapped(hash: &str) -> Option<&'static [u8]> {
     SWAPS
         .get_or_init(|| {
             let mut swaps = HashMap::new();
-            let Some(folder) = std::env::var_os("VICTORY_SHADER_SWAP") else { return swaps };
+            let Some(folder) = std::env::var_os("VICTORY_SHADER_SWAP") else {
+                return swaps;
+            };
             for entry in std::fs::read_dir(folder).into_iter().flatten().flatten() {
                 let path = entry.path();
                 if path.extension().is_some_and(|e| e == "dxbc")
-                    && let (Some(name), Ok(bytes)) = (path.file_stem().and_then(|n| n.to_str()), std::fs::read(&path))
+                    && let (Some(name), Ok(bytes)) = (
+                        path.file_stem().and_then(|n| n.to_str()),
+                        std::fs::read(&path),
+                    )
                 {
                     swaps.insert(name.to_owned(), bytes);
                 }
@@ -496,14 +503,21 @@ pub(crate) fn names(this: This) -> String {
     if this.is_null() {
         return "none".into();
     }
-    pipeline(this).shaders.iter().map(|s| format!("{} {}", s.name(), s.hash)).collect()
+    pipeline(this)
+        .shaders
+        .iter()
+        .map(|s| format!("{} {}", s.name(), s.hash))
+        .collect()
 }
 
 /// Counts a draw or dispatch dropped for `why` (diagnostics).
 #[cfg(all(windows, feature = "diagnostics"))]
 pub(crate) fn note_why(why: String) {
     let mut drops = DROPS.lock().unwrap_or_else(|e| e.into_inner());
-    *drops.get_or_insert_with(HashMap::new).entry(why).or_default() += 1;
+    *drops
+        .get_or_insert_with(HashMap::new)
+        .entry(why)
+        .or_default() += 1;
 }
 
 /// The drops counted since the last call, most first (diagnostics).

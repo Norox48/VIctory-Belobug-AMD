@@ -51,7 +51,9 @@ fn build() -> &'static [u8; 32] {
         if let Some(other) = &other {
             tracing::warn!(of = %other.display(), "shader cache entries of another build are used");
         }
-        let exe = other.map_or_else(std::env::current_exe, Ok).and_then(std::fs::read);
+        let exe = other
+            .map_or_else(std::env::current_exe, Ok)
+            .and_then(std::fs::read);
         let limit = victory_shader::emit::loop_limit();
         if limit != victory_shader::emit::DEFAULT_LOOP_LIMIT {
             tracing::warn!(

@@ -251,7 +251,11 @@ impl GraphicsState {
                 )
             })
             .collect();
-        let depth_bounds = if self.depth_bounds { " depth bounds" } else { "" };
+        let depth_bounds = if self.depth_bounds {
+            " depth bounds"
+        } else {
+            ""
+        };
         format!(
             "{:?} {} {:?} {:?} {inputs:?} {} {} {:?} {} {:?}{depth_bounds}",
             self.blend,
@@ -601,12 +605,20 @@ impl HostPipeline {
             let ms = Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS, code(0));
             let made = match depth_with_bounds {
                 Some(depth) => stream_pipeline(
-                    &host.device, &root, ms, code(1), g,
+                    &host.device,
+                    &root,
+                    ms,
+                    code(1),
+                    g,
                     Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1, depth),
                     &name,
                 ),
                 None => stream_pipeline(
-                    &host.device, &root, ms, code(1), g,
+                    &host.device,
+                    &root,
+                    ms,
+                    code(1),
+                    g,
                     Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL, g.depth),
                     &name,
                 ),
@@ -675,7 +687,11 @@ impl HostPipeline {
             ..Default::default()
         };
         let name = super::library::name(
-            if gs.is_some() { "rectangles" } else { "graphics" },
+            if gs.is_some() {
+                "rectangles"
+            } else {
+                "graphics"
+            },
             &root_blob,
             &[&code_bytes(&code(0)), &code_bytes(&code(1))],
             &state,
@@ -683,7 +699,10 @@ impl HostPipeline {
         let made = if let Some(depth) = depth_with_bounds {
             let vertex = VertexStream {
                 vs: Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS, desc.VS),
-                input: Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT, desc.InputLayout),
+                input: Sub(
+                    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT,
+                    desc.InputLayout,
+                ),
                 strip_cut: Sub(
                     D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE,
                     desc.IBStripCutValue,
@@ -694,7 +713,11 @@ impl HostPipeline {
                 ),
             };
             stream_pipeline(
-                &host.device, &root, vertex, desc.PS, g,
+                &host.device,
+                &root,
+                vertex,
+                desc.PS,
+                g,
                 Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1, depth),
                 &name,
             )
@@ -780,18 +803,30 @@ fn stream_pipeline<S, D>(
         samples: Sub<DXGI_SAMPLE_DESC>,
     }
     let mut stream = Stream {
-        root: Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE, root.as_raw()),
+        root: Sub(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE,
+            root.as_raw(),
+        ),
         stages,
         ps: Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, ps),
-        blend: Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND, host_blend(&g.blend, &g.targets)),
+        blend: Sub(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND,
+            host_blend(&g.blend, &g.targets),
+        ),
         mask: Sub(
             D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK,
             g.sample_mask,
         ),
         raster: Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER, g.rasterizer),
         depth,
-        targets: Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS, g.targets),
-        dsv: Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT, g.depth_format),
+        targets: Sub(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS,
+            g.targets,
+        ),
+        dsv: Sub(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT,
+            g.depth_format,
+        ),
         samples: Sub(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC, g.samples),
     };
     let desc = D3D12_PIPELINE_STATE_STREAM_DESC {

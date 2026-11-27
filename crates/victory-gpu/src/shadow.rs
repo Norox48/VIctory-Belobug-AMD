@@ -171,7 +171,9 @@ static SPARSE_WRITES: [std::sync::atomic::AtomicU64; 4] =
 pub(crate) fn sparse_writes_text() -> String {
     let [declared, taken, compared, differed] =
         [0, 1, 2, 3].map(|i| SPARSE_WRITES[i].swap(0, Ordering::Relaxed) as f64 / 1e6);
-    format!("declared {declared:.1} MB, snapshots {taken:.1} MB, compared {compared:.1} MB, differed {differed:.1} MB")
+    format!(
+        "declared {declared:.1} MB, snapshots {taken:.1} MB, compared {compared:.1} MB, differed {differed:.1} MB"
+    )
 }
 
 /// Bytes of the snapshot memory kept for reuse.
@@ -239,14 +241,14 @@ impl Shadow {
     #[cfg(test)]
     pub(crate) fn host_bytes(&self, address: u64, len: usize) -> Vec<u8> {
         // SAFETY: inside the mapping; no submission runs while tests read.
-        unsafe { std::slice::from_raw_parts(self.data.add(self.offset(address) as usize), len) }.to_vec()
+        unsafe { std::slice::from_raw_parts(self.data.add(self.offset(address) as usize), len) }
+            .to_vec()
     }
 
     /// Brings `len` bytes at `address` up to date when `list` is submitted,
     /// and keeps the copy alive until the list is reset.
     pub(crate) fn refresh(self: &Arc<Self>, list: &HostList, address: u64, len: u64) {
         if self.direct.is_some() {
-
             return;
         }
         let len = len.min(self.start + self.len - address);
@@ -328,8 +330,7 @@ impl Shadow {
                 let gpu_new = unsafe {
                     std::slice::from_raw_parts((rb_ptr + (k as usize) * PAGE) as *const u8, n)
                 };
-                let staging_old =
-                    unsafe { std::slice::from_raw_parts_mut(self.data.add(off), n) };
+                let staging_old = unsafe { std::slice::from_raw_parts_mut(self.data.add(off), n) };
                 if gpu_new == staging_old {
                     continue;
                 }
@@ -431,7 +432,9 @@ impl Shadow {
     /// The same for copies that share their memory.
     pub(crate) fn root_key(&self) -> usize {
         self.sparse_root()
-            .map_or(std::ptr::from_ref(self) as usize, |(r, _)| std::ptr::from_ref(r) as usize)
+            .map_or(std::ptr::from_ref(self) as usize, |(r, _)| {
+                std::ptr::from_ref(r) as usize
+            })
     }
 
     /// Whether the title mapped other memory there since.
@@ -456,7 +459,12 @@ impl Shadow {
                 if let Some((_, s)) = aliases.iter().find(|(b, _)| *b == base) {
                     return Some(s.clone());
                 }
-                let made = Arc::new(placed(&direct.heap, base - first, base, first + self.len - base)?);
+                let made = Arc::new(placed(
+                    &direct.heap,
+                    base - first,
+                    base,
+                    first + self.len - base,
+                )?);
                 aliases.push((base, made.clone()));
                 return Some(made);
             }
@@ -708,8 +716,12 @@ impl Shadow {
         // frame (a guard does not see a write through another view of the
         // page). They tell which of these leaves a copy stale.
         static ALWAYS: std::sync::OnceLock<u8> = std::sync::OnceLock::new();
-        let always = *ALWAYS
-            .get_or_init(|| std::env::var("VICTORY_ALWAYS_COPY").ok().and_then(|v| v.parse().ok()).unwrap_or(0));
+        let always = *ALWAYS.get_or_init(|| {
+            std::env::var("VICTORY_ALWAYS_COPY")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0)
+        });
         let mut mode = self.watched.load(Ordering::Relaxed);
         let forced = always == 1 || always == 3 && mode == WATCHED_GUARDED;
         if forced {
@@ -887,7 +899,9 @@ impl Shadow {
                     if changed {
                         same = false;
                         // SAFETY: the tile's mapping; only submissions write it.
-                        unsafe { std::ptr::copy_nonoverlapping(part.as_ptr(), data.add(done), len) };
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(part.as_ptr(), data.add(done), len)
+                        };
                     }
                     done += len;
                 }
@@ -973,7 +987,8 @@ fn windows_of_memory() -> std::sync::MutexGuard<'static, BTreeMap<u64, Arc<Shado
 
 /// Buffers of windows gone since (by interface address): views of them are
 /// made again.
-static GONE: Mutex<std::collections::BTreeSet<usize>> = Mutex::new(std::collections::BTreeSet::new());
+static GONE: Mutex<std::collections::BTreeSet<usize>> =
+    Mutex::new(std::collections::BTreeSet::new());
 
 /// Whether a host buffer is one of a window gone since.
 pub(crate) fn gone(buffer: &ID3D12Resource) -> bool {
@@ -996,7 +1011,10 @@ fn placed(
         Height: 1,
         DepthOrArraySize: 1,
         MipLevels: 1,
-        SampleDesc: windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        SampleDesc: windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
         Layout: D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         Flags: D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER,
         ..Default::default()
@@ -1018,7 +1036,9 @@ fn placed(
         return None;
     }
     let buffer = buffer?;
-    crate::host::name(&buffer, || format!("title memory {start:#x}+{len:#x} in place"));
+    crate::host::name(&buffer, || {
+        format!("title memory {start:#x}+{len:#x} in place")
+    });
     // SAFETY: a live buffer.
     let gpu = unsafe { buffer.GetGPUVirtualAddress() };
     Some(Shadow {
@@ -1050,7 +1070,8 @@ const WINDOW_REACH: u64 = 1 << 30;
 /// whole 64 KiB pages.
 fn run_of(from: u64, to: u64) -> Option<(u64, u64)> {
     use windows_sys::Win32::System::Memory::{
-        MEM_COMMIT, MEM_IMAGE, MEMORY_BASIC_INFORMATION, PAGE_READONLY, PAGE_READWRITE, VirtualQuery,
+        MEM_COMMIT, MEM_IMAGE, MEMORY_BASIC_INFORMATION, PAGE_READONLY, PAGE_READWRITE,
+        VirtualQuery,
     };
     let query = |at: u64| {
         let mut info = MEMORY_BASIC_INFORMATION::default();
@@ -1084,7 +1105,10 @@ fn run_of(from: u64, to: u64) -> Option<(u64, u64)> {
         end = next;
     }
     let page = PAGE as u64;
-    let (start, end) = (start.max(low).next_multiple_of(page), end.min(high) & !(page - 1));
+    let (start, end) = (
+        start.max(low).next_multiple_of(page),
+        end.min(high) & !(page - 1),
+    );
     // Not short views: the title maps and unmaps those (streaming), which
     // the host refuses while the GPU uses them.
     if first.Type == windows_sys::Win32::System::Memory::MEM_MAPPED && end - start < 16 << 20 {
@@ -1120,7 +1144,10 @@ fn direct(address: u64, end: u64) -> Option<Arc<Shadow>> {
         } else {
             None
         };
-        tracing::info!(on = device.is_some(), "title memory used in place by the host GPU");
+        tracing::info!(
+            on = device.is_some(),
+            "title memory used in place by the host GPU"
+        );
         device
     });
     let device = device.as_ref()?;
@@ -1182,7 +1209,12 @@ fn direct(address: u64, end: u64) -> Option<Arc<Shadow>> {
                     }
                     text.push_str(&format!(
                         " {:x}+{:x}@{:x}:{:x}/{:x}/{:x}",
-                        i.BaseAddress as usize, i.RegionSize, i.AllocationBase as usize, i.State, i.Type, i.Protect
+                        i.BaseAddress as usize,
+                        i.RegionSize,
+                        i.AllocationBase as usize,
+                        i.State,
+                        i.Type,
+                        i.Protect
                     ));
                     at = i.BaseAddress as u64 + i.RegionSize as u64;
                 }
@@ -1253,7 +1285,13 @@ fn through_another_view(
     // SAFETY: a section the runtime told us of, alive while it has views;
     // the stretch is inside it.
     let view = unsafe {
-        MapViewOfFile(section as _, FILE_MAP_WRITE, (offset >> 32) as u32, offset as u32, len)
+        MapViewOfFile(
+            section as _,
+            FILE_MAP_WRITE,
+            (offset >> 32) as u32,
+            offset as u32,
+            len,
+        )
     };
     if view.Value.is_null() {
         tracing::warn!(
@@ -1267,7 +1305,8 @@ fn through_another_view(
     // Read-only guards would refuse the GPU's writes.
     crate::watch::writing(start, len);
     // SAFETY: committed pages of a view of ours; the heap keeps them.
-    let heap: Result<ID3D12Heap, _> = unsafe { device.OpenExistingHeapFromAddress1(view.Value, len) };
+    let heap: Result<ID3D12Heap, _> =
+        unsafe { device.OpenExistingHeapFromAddress1(view.Value, len) };
     let window = match heap {
         Ok(heap) => placed(&heap, 0, start as u64, len as u64),
         Err(error) => {
@@ -1370,7 +1409,7 @@ pub(crate) fn remapped(start: u64, end: u64) {
                 gone.insert(a.buffer.as_raw() as usize);
                 if let Some(d) = &a.direct {
                     d.dead.store(true, Ordering::Release);
-            DIED.fetch_add(1, Ordering::Release);
+                    DIED.fetch_add(1, Ordering::Release);
                 }
             }
         }
@@ -1398,7 +1437,11 @@ pub(crate) fn for_view(address: u64, len: u64, element: u64) -> Option<Arc<Shado
     shadow.on_element(address, element).or_else(|| {
         static ONCE: std::sync::Once = std::sync::Once::new();
         ONCE.call_once(|| {
-            tracing::warn!(address = format_args!("{address:#x}"), element, "a view off its elements: copied");
+            tracing::warn!(
+                address = format_args!("{address:#x}"),
+                element,
+                "a view off its elements: copied"
+            );
         });
         let copy = find_copy(address, len)?;
         if copy.sparse.is_some() {
@@ -1482,7 +1525,12 @@ const BLOCK: usize = 1 << 10;
 
 /// A quick hash, never 0.
 fn mixed(bytes: &[u8]) -> u64 {
-    let mut h = [0x9e37_79b9_7f4a_7c15_u64, 0xc2b2_ae3d_27d4_eb4f, 0x1656_67b1_9e37_79f9, 0x27d4_eb2f_1656_67c5];
+    let mut h = [
+        0x9e37_79b9_7f4a_7c15_u64,
+        0xc2b2_ae3d_27d4_eb4f,
+        0x1656_67b1_9e37_79f9,
+        0x27d4_eb2f_1656_67c5,
+    ];
     for c in bytes.chunks_exact(32) {
         for (k, h) in h.iter_mut().enumerate() {
             let x = u64::from_le_bytes(c[8 * k..8 * k + 8].try_into().unwrap_or_default());
@@ -1546,7 +1594,11 @@ const CHUNK: u64 = 2 << 30;
 
 /// Memory for tiles, in heaps the CPU maps.
 struct TilePool {
-    heaps: Vec<(windows::Win32::Graphics::Direct3D12::ID3D12Heap, ID3D12Resource, usize)>,
+    heaps: Vec<(
+        windows::Win32::Graphics::Direct3D12::ID3D12Heap,
+        ID3D12Resource,
+        usize,
+    )>,
     /// Tiles used of the last one.
     used: u32,
     /// Tiles given back.
@@ -1589,20 +1641,22 @@ fn new_tile() -> Option<Tile> {
         // SAFETY: plain creation; the mapping lives as long as the heap.
         let made = unsafe {
             let device = &host()?.device;
-            device.CreateHeap(&desc, &mut heap).and_then(|()| {
-                device.CreatePlacedResource(
-                    heap.as_ref(),
-                    0,
-                    &buffer_desc(size, D3D12_RESOURCE_FLAG_NONE),
-                    D3D12_RESOURCE_STATE_COMMON,
-                    None,
-                    &mut whole,
-                )
-            })
-            .and_then(|()| match &whole {
-                Some(w) => w.Map(0, None, Some(&mut data)),
-                None => Err(windows::core::Error::empty()),
-            })
+            device
+                .CreateHeap(&desc, &mut heap)
+                .and_then(|()| {
+                    device.CreatePlacedResource(
+                        heap.as_ref(),
+                        0,
+                        &buffer_desc(size, D3D12_RESOURCE_FLAG_NONE),
+                        D3D12_RESOURCE_STATE_COMMON,
+                        None,
+                        &mut whole,
+                    )
+                })
+                .and_then(|()| match &whole {
+                    Some(w) => w.Map(0, None, Some(&mut data)),
+                    None => Err(windows::core::Error::empty()),
+                })
         };
         if let Err(error) = made {
             tracing::warn!(%error, "no memory for copies of title memory");
@@ -1639,7 +1693,10 @@ fn sweeps() -> u8 {
         if cfg!(test) {
             return 1;
         }
-        std::env::var("VICTORY_SWEEP_TILES").ok().and_then(|v| v.parse().ok()).unwrap_or(0)
+        std::env::var("VICTORY_SWEEP_TILES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0)
     })
 }
 
@@ -1669,7 +1726,12 @@ pub(crate) fn sweep(frame: u64) {
         .collect();
     for shadow in all {
         let Some(s) = &shadow.sparse else { continue };
-        if !shadow.pending.lock().unwrap_or_else(|e| e.into_inner()).is_empty() {
+        if !shadow
+            .pending
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty()
+        {
             continue;
         }
         // Those old enough, taken under the lock; whether their title memory
@@ -1813,7 +1875,10 @@ fn buffer_desc(
         Height: 1,
         DepthOrArraySize: 1,
         MipLevels: 1,
-        SampleDesc: windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        SampleDesc: windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
         Layout: D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         Flags: flags,
         ..Default::default()
@@ -1840,7 +1905,9 @@ fn sparse_buffer(start: u64, len: u64, of: Option<Arc<Shadow>>) -> Option<Shadow
         return None;
     }
     let buffer = buffer?;
-    crate::host::name(&buffer, || format!("copies of title memory {start:#x}+{len:#x}"));
+    crate::host::name(&buffer, || {
+        format!("copies of title memory {start:#x}+{len:#x}")
+    });
     // SAFETY: a live buffer.
     let gpu = unsafe { buffer.GetGPUVirtualAddress() };
     tracing::info!(
@@ -1856,7 +1923,11 @@ fn sparse_buffer(start: u64, len: u64, of: Option<Arc<Shadow>>) -> Option<Shadow
         gpu,
         start,
         len,
-        copied: Mutex::new(if of.is_some() { Vec::new() } else { vec![0; (len / PAGE as u64) as usize] }),
+        copied: Mutex::new(if of.is_some() {
+            Vec::new()
+        } else {
+            vec![0; (len / PAGE as u64) as usize]
+        }),
         watched: AtomicU8::new(0),
         pending: Mutex::default(),
         before: Mutex::default(),
@@ -1899,7 +1970,9 @@ pub(crate) fn declare(list: &HostList, address: u64, len: u64) {
     if address >> 40 != 0 || address < 1 << 20 {
         return;
     }
-    let Some(s) = find_reaching(address, 1) else { return };
+    let Some(s) = find_reaching(address, 1) else {
+        return;
+    };
     if s.is_direct() {
         crate::memory::reach(address, Some((&s.buffer, s.start, s.len)));
         return;
@@ -1984,7 +2057,13 @@ impl Shadow {
 
     /// Runs `f` on the CPU's view of each tile's part of `[from, to)`: its
     /// title address, the view, its length.
-    fn each_tile(&self, s: &Sparse, from: usize, to: usize, mut f: impl FnMut(usize, *mut u8, usize)) {
+    fn each_tile(
+        &self,
+        s: &Sparse,
+        from: usize,
+        to: usize,
+        mut f: impl FnMut(usize, *mut u8, usize),
+    ) {
         let mut at = from;
         while at < to {
             let n = (PAGE - at % PAGE).min(to - at);
@@ -2094,8 +2173,11 @@ impl Shadow {
         #[cfg(feature = "diagnostics")]
         SPARSE_WRITES[1].fetch_add((new.len() * PAGE) as u64, Ordering::Relaxed);
         let mut bufs = pooled_tiles(new.len());
-        let copies: Vec<(usize, usize)> =
-            new.iter().zip(&mut bufs).map(|(&(_, view), buf)| (view, buf.as_mut_ptr() as usize)).collect();
+        let copies: Vec<(usize, usize)> = new
+            .iter()
+            .zip(&mut bufs)
+            .map(|(&(_, view), buf)| (view, buf.as_mut_ptr() as usize))
+            .collect();
         crate::host::in_parallel(&copies, 16, |chunk| {
             for &(view, buf) in chunk {
                 // SAFETY: the tile's mapping; a buffer with room for a tile,
@@ -2147,7 +2229,9 @@ impl Shadow {
                 if !crate::host::read_into(at as *const u8, &mut buf[..n]) {
                     continue;
                 }
-                if let Some((dirty_start, dirty_end)) = merge_gpu_writes_mut(&mut buf[..n], host, old) {
+                if let Some((dirty_start, dirty_end)) =
+                    merge_gpu_writes_mut(&mut buf[..n], host, old)
+                {
                     let dirty_len = dirty_end - dirty_start;
                     crate::watch::writing(at + dirty_start, dirty_len);
                     crate::host::write_mapped(
@@ -2547,14 +2631,23 @@ pub(crate) fn near(va: u64) -> String {
             .values()
             .map(|s| (s.gpu, s.start, s.len)),
     );
-    for s in SPARSE.lock().unwrap_or_else(|e| e.into_inner()).values().flatten() {
+    for s in SPARSE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .values()
+        .flatten()
+    {
         all.push((s.gpu, s.start, s.len));
         if let Some(sparse) = &s.sparse {
             let aliases = sparse.aliases.lock().unwrap_or_else(|e| e.into_inner());
             all.extend(aliases.iter().map(|a| (a.gpu, a.start, a.len)));
         }
     }
-    all.extend(windows_of_memory().values().map(|s| (s.gpu, s.start, s.len)));
+    all.extend(
+        windows_of_memory()
+            .values()
+            .map(|s| (s.gpu, s.start, s.len)),
+    );
     let below = all.iter().filter(|c| c.0 <= va).max();
     let above = all.iter().filter(|c| c.0 > va).min();
     let mut text = match below {

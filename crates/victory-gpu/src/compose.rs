@@ -70,7 +70,10 @@ fn compile(entry: PCSTR, target: PCSTR) -> windows::core::Result<ID3DBlob> {
 }
 
 fn make(host: &Host, format: DXGI_FORMAT) -> windows::core::Result<Composer> {
-    let (vs, ps) = (compile(s!("vs"), s!("vs_5_1"))?, compile(s!("ps"), s!("ps_5_1"))?);
+    let (vs, ps) = (
+        compile(s!("vs"), s!("vs_5_1"))?,
+        compile(s!("ps"), s!("ps_5_1"))?,
+    );
     // SAFETY: the blobs' own bytes, alive through the calls.
     unsafe {
         let bytes = |b: &ID3DBlob| {
@@ -101,7 +104,8 @@ fn make(host: &Host, format: DXGI_FORMAT) -> windows::core::Result<Composer> {
             ..Default::default()
         };
         desc.RTVFormats[0] = format;
-        desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL.0 as u8;
+        desc.BlendState.RenderTarget[0].RenderTargetWriteMask =
+            D3D12_COLOR_WRITE_ENABLE_ALL.0 as u8;
         let pso = device.CreateGraphicsPipelineState(&desc)?;
         let views = device.CreateDescriptorHeap(&D3D12_DESCRIPTOR_HEAP_DESC {
             Type: D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,

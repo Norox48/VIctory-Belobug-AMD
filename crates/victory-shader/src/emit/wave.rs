@@ -470,11 +470,25 @@ fn simulate(insts: &[Inst], wave: u32, saved: Value) -> Found {
                 match *v.src.get(k)? {
                     Operand::Vector { reg, .. } => Some((
                         lanes(&Operand::Vector { reg, dwords: 1 }, &vec, &uni),
-                        lanes(&Operand::Vector { reg: reg + 1, dwords: 1 }, &vec, &uni),
+                        lanes(
+                            &Operand::Vector {
+                                reg: reg + 1,
+                                dwords: 1,
+                            },
+                            &vec,
+                            &uni,
+                        ),
                     )),
                     Operand::Scalar { code, .. } if code != NULL => Some((
                         lanes(&Operand::Scalar { code, dwords: 1 }, &vec, &uni),
-                        lanes(&Operand::Scalar { code: code + 1, dwords: 1 }, &vec, &uni),
+                        lanes(
+                            &Operand::Scalar {
+                                code: code + 1,
+                                dwords: 1,
+                            },
+                            &vec,
+                            &uni,
+                        ),
                     )),
                     _ => None,
                 }
@@ -482,21 +496,48 @@ fn simulate(insts: &[Inst], wave: u32, saved: Value) -> Found {
             let unpack = |lo: Sym, hi: Sym| -> Option<(Value, Value, Value, u64)> {
                 match (lo, hi) {
                     (
-                        Sym::Red { op: None, src: s_lo, mask: m_lo, ident: 0, lanes: l_lo },
-                        Sym::Red { op: None, src: s_hi, mask: m_hi, ident, lanes: l_hi },
+                        Sym::Red {
+                            op: None,
+                            src: s_lo,
+                            mask: m_lo,
+                            ident: 0,
+                            lanes: l_lo,
+                        },
+                        Sym::Red {
+                            op: None,
+                            src: s_hi,
+                            mask: m_hi,
+                            ident,
+                            lanes: l_hi,
+                        },
                     ) if m_lo == m_hi && l_lo == l_hi && (ident == 0 || ident == 0x8000_0000) => {
                         Some((s_lo, s_hi, m_lo, l_lo))
                     }
                     (
-                        Sym::RedF64 { lo: s_lo, hi: s_hi, mask: m_lo, lanes: l_lo, is_hi: false },
-                        Sym::RedF64 { lo: s_lo2, hi: s_hi2, mask: m_hi, lanes: l_hi, is_hi: true },
+                        Sym::RedF64 {
+                            lo: s_lo,
+                            hi: s_hi,
+                            mask: m_lo,
+                            lanes: l_lo,
+                            is_hi: false,
+                        },
+                        Sym::RedF64 {
+                            lo: s_lo2,
+                            hi: s_hi2,
+                            mask: m_hi,
+                            lanes: l_hi,
+                            is_hi: true,
+                        },
                     ) if (s_lo, s_hi, m_lo, l_lo) == (s_lo2, s_hi2, m_hi, l_hi) => {
                         Some((s_lo, s_hi, m_lo, l_lo))
                     }
                     _ => None,
                 }
             };
-            let (mut res_lo, mut res_hi) = (vec![Sym::Unknown; wave as usize], vec![Sym::Unknown; wave as usize]);
+            let (mut res_lo, mut res_hi) = (
+                vec![Sym::Unknown; wave as usize],
+                vec![Sym::Unknown; wave as usize],
+            );
             if let (Some((a_lo, a_hi)), Some((b_lo, b_hi))) = (pair_lanes(0), pair_lanes(1)) {
                 for l in 0..wave as usize {
                     if let (Some(a), Some(b)) = (unpack(a_lo[l], a_hi[l]), unpack(b_lo[l], b_hi[l]))
@@ -504,14 +545,49 @@ fn simulate(insts: &[Inst], wave: u32, saved: Value) -> Found {
                         && a.3 & b.3 == 0
                     {
                         let lanes = a.3 | b.3;
-                        res_lo[l] = Sym::RedF64 { lo: a.0, hi: a.1, mask: a.2, lanes, is_hi: false };
-                        res_hi[l] = Sym::RedF64 { lo: a.0, hi: a.1, mask: a.2, lanes, is_hi: true };
+                        res_lo[l] = Sym::RedF64 {
+                            lo: a.0,
+                            hi: a.1,
+                            mask: a.2,
+                            lanes,
+                            is_hi: false,
+                        };
+                        res_hi[l] = Sym::RedF64 {
+                            lo: a.0,
+                            hi: a.1,
+                            mask: a.2,
+                            lanes,
+                            is_hi: true,
+                        };
                     }
                 }
             }
-            let old_hi = lanes(&Operand::Vector { reg: dreg + 1, dwords: 1 }, &vec, &uni);
-            let m_lo = (0..wave as usize).map(|l| if exec >> l & 1 != 0 { res_lo[l] } else { old[l] }).collect();
-            let m_hi = (0..wave as usize).map(|l| if exec >> l & 1 != 0 { res_hi[l] } else { old_hi[l] }).collect();
+            let old_hi = lanes(
+                &Operand::Vector {
+                    reg: dreg + 1,
+                    dwords: 1,
+                },
+                &vec,
+                &uni,
+            );
+            let m_lo = (0..wave as usize)
+                .map(|l| {
+                    if exec >> l & 1 != 0 {
+                        res_lo[l]
+                    } else {
+                        old[l]
+                    }
+                })
+                .collect();
+            let m_hi = (0..wave as usize)
+                .map(|l| {
+                    if exec >> l & 1 != 0 {
+                        res_hi[l]
+                    } else {
+                        old_hi[l]
+                    }
+                })
+                .collect();
             vec.insert(dst, m_lo);
             if let Some(dst_hi) = inst.write(Reg::V(dreg + 1)) {
                 vec.insert(dst_hi, m_hi);
